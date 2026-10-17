@@ -2,7 +2,7 @@
 
 [English](client-compatibility.md) · [中文首页](../README.zh-CN.md) · [安全部署与恢复](deployment.zh-CN.md)
 
-当前是 **公开 Beta 的未发布候选**。这里生成的只是只读配置片段，不代表真实客户端重连成功，也不表示获得 Grok Bot Routine 或 Windows 命令批准。Codex 云端执行环境和 Grok Bot 云电脑**不会自动共享用户的 Windows 文件或 Credential Manager**。
+当前适用 **0.1.4b1 实验性 Beta**。这里生成的只是只读配置片段，不代表真实客户端重连成功，也不表示获得 Grok Bot Routine 或 Windows 命令批准。Codex 云端执行环境和 Grok Bot 云电脑**不会自动共享用户的 Windows 文件或 Credential Manager**。
 
 ## 一次生成两类配置
 

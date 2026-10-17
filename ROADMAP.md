@@ -1,6 +1,6 @@
 # Public Beta roadmap
 
-**Candidate: 0.1.4b1 (Private; not published).** This roadmap describes planned milestones, not a guarantee of compatibility with future Cursor, Codex or Grok Bot releases.
+**Target: 0.1.4b1 experimental Beta; release availability depends on maintainer authorization.** This roadmap describes planned milestones, not a guarantee of compatibility with future Cursor, Codex or Grok Bot releases.
 
 ## Beta scope (Windows)
 - Windows 11 / supported Windows runner, Python 3.12, Git, MCP stdio.

@@ -1,6 +1,6 @@
-# 0.1.4b1 — Windows MCP bridge Public Beta candidate
+# 0.1.4b1 — Windows MCP bridge Public Beta
 
-**Candidate only.** Source changes, GitHub visibility and a GitHub Release are separately authorized actions. There is no current public release attached to this source.
+**Experimental Beta, not stable or hosted.** A source commit or passing CI does not authorize publication; check the GitHub Releases page for actual distribution assets and verify their published hashes.
 
 ## What this Beta includes
 - Unofficial Windows-local Grok Bot Routine bridge, Python 3.12, Git and MCP stdio.

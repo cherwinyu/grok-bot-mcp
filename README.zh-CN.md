@@ -4,7 +4,7 @@
 
 [English](README.md) · [快速开始](docs/quickstart.zh-CN.md) · [Cursor / Codex CLI](docs/client-compatibility.zh-CN.md) · [Beta 支持范围](docs/beta-support.zh-CN.md) · [安全声明](SECURITY.md)
 
-**0.1.4b1 Beta 候选：仍为 Private，尚未发布。** MIT；不是 Grok、xAI、Cursor 或 OpenAI 官方产品。目标环境 Windows、Python 3.12、Git。Python 分发名为 `grokbot-mcp-bridge`，导入名为 `grokbot_mcp`；不承诺绕过第三方订阅或调用限额。
+**0.1.4b1 实验性 Beta 系列。** 是否已正式发行请以 GitHub Releases 为准；单独的源码提交不是正式发行。 MIT；不是 Grok、xAI、Cursor 或 OpenAI 官方产品。目标环境 Windows、Python 3.12、Git。Python 分发名为 `grokbot-mcp-bridge`，导入名为 `grokbot_mcp`；不承诺绕过第三方订阅或调用限额。
 
 ## 无需账号的安全离线体验
 
@@ -57,4 +57,4 @@ Windows Cursor / Codex --stdio--> 本机 Bridge
 
 [Issue 与反馈](https://github.com/cherwinyu/grok-bot-mcp/issues) · [贡献](CONTRIBUTING.md) · [发行流程](docs/release-process.md) · [MIT](LICENSE)
 
-新仓没有导入私人开发历史。没有另行授权，不创建公开 Release、Tag 或 PyPI。
+新仓没有导入私人开发历史。是否有正式 Beta 包请以 GitHub Releases 为准，首版不通过 PyPI 分发。

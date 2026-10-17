@@ -16,7 +16,10 @@ import sys
 import tomllib
 import zipfile
 
-from scripts.build_release import public_files
+if __package__:
+    from .build_release import public_files
+else:
+    from build_release import public_files
 
 
 class CandidateError(ValueError):

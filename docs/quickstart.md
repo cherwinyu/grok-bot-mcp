@@ -2,7 +2,7 @@
 
 [中文](quickstart.zh-CN.md) · [Home](../README.md)
 
-This is the unpublished **0.1.4b1 Beta candidate**. Use a new installation and a fictional workspace first. For offline evaluation, stop after the demo; no account or credential is required. [Support matrix](beta-support.md) · [Cursor/Codex clients](client-compatibility.md) · [FAQ](faq.md).
+This guide describes the **0.1.4b1 experimental Beta**. Use a new installation and a fictional workspace first. For offline evaluation, stop after the demo; no account or credential is required. [Support matrix](beta-support.md) · [Cursor/Codex clients](client-compatibility.md) · [FAQ](faq.md).
 
 ## 1. Obtain and install this candidate
 

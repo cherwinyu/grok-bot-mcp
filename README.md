@@ -4,7 +4,7 @@
 
 [简体中文](README.zh-CN.md) · [Quickstart](docs/quickstart.md) · [Cursor / Codex CLI](docs/client-compatibility.md) · [Beta support](docs/beta-support.md) · [Security](SECURITY.md)
 
-**0.1.4b1 Beta release candidate — currently Private, not yet published.** MIT; unofficial and not endorsed by Grok, xAI, Cursor or OpenAI. Requires Windows, Python 3.12 and Git. The distribution is `grokbot-mcp-bridge` for compatibility; import as `grokbot_mcp`. Not a hosted service, PyPI package or guaranteed quota workaround.
+**0.1.4b1 experimental Beta line.** Check GitHub Releases for actual published assets; a source checkout alone is not an official release. MIT; unofficial and not endorsed by Grok, xAI, Cursor or OpenAI. Requires Windows, Python 3.12 and Git. The distribution is `grokbot-mcp-bridge` for compatibility; import as `grokbot_mcp`. Not a hosted service, PyPI package or guaranteed quota workaround.
 
 ## Try it safely without any account
 
@@ -63,4 +63,4 @@ Native Windows CI checks installed wheel, snippet formats and fictional stdio. I
 
 [Issues](https://github.com/cherwinyu/grok-bot-mcp/issues) · [Contribute](CONTRIBUTING.md) · [Release procedure](docs/release-process.md) · [MIT](LICENSE) · [NOTICE](NOTICE.md) · [Changelog](CHANGELOG.md).
 
-No GitHub Release/Tag or PyPI publication exists until separately authorized. This repository does not include the private development Git history or its internal task logs.
+GitHub Beta Release is the intended distribution channel; check Releases for availability. This repository does not include the private development Git history or its internal task logs. No PyPI distribution is provided as part of this Beta.

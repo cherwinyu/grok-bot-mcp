@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.4b1 (candidate, not yet published)
+## 0.1.4b1 (experimental Beta)
 
 - First standalone Public Beta candidate in a clean repository without the private development history.
 - Add read-only Cursor JSON and Codex CLI TOML configuration fragments and Unicode/TOML validation.

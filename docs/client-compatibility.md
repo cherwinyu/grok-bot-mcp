@@ -2,7 +2,7 @@
 
 [中文说明](client-compatibility.zh-CN.md) · [Home](../README.md) · [Deployment and recovery](deployment.md)
 
-**Public Beta release candidate (not yet published).** These instructions generate configuration *snippets*, not actual client connectivity or a Grok Bot account approval. Run the local bridge only on the selected Windows host using a reviewed Python 3.12 venv and an explicitly selected registered workspace. A cloud-hosted Codex session or Grok Bot cloud computer does not inherit local Windows files or Windows Credential Manager.
+**Experimental 0.1.4b1 Beta scope.** These instructions generate configuration *snippets*, not actual client connectivity or a Grok Bot account approval. Run the local bridge only on the selected Windows host using a reviewed Python 3.12 venv and an explicitly selected registered workspace. A cloud-hosted Codex session or Grok Bot cloud computer does not inherit local Windows files or Windows Credential Manager.
 
 ## Generate snippets, with no client-file writes
 

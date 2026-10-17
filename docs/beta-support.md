@@ -3,7 +3,7 @@
 [中文](beta-support.zh-CN.md) · [Home](../README.md) · [Data boundaries](data-boundaries.md)
 
 ## Version and environment
-- **0.1.4b1 is a Private release candidate, not a published Release.**
+- **0.1.4b1 is the experimental Beta line; verify current availability through GitHub Releases.**
 - Windows 11 / native Windows CI, Python 3.12, Git and MCP stdio.
 - Dependency baseline: `mcp==2.3.0`. Other SDK versions or platforms are not guaranteed by this Beta.
 - External use requires a user-configured bearer-protocol Grok Bot Routine and separately permitted Windows desktop commands.
