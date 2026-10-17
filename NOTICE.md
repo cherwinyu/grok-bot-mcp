@@ -1,6 +1,6 @@
 # Notice
 
-grokbot-mcp-bridge is an unofficial community tool. It is not a product of xAI, Grok, Cursor, or Anthropic, and it is not endorsed by those projects.
+grok-bot-mcp is an unofficial community tool (Python distribution: grokbot-mcp-bridge). It is not a product of xAI, Grok, Cursor, and it is not endorsed by those projects.
 
 The names Grok and Grok Bot are used only to describe interoperability with a webhook routine that the operator configures. They are not used to claim affiliation.
 

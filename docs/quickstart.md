@@ -1,8 +1,8 @@
-# Quickstart: one wizard, one manual Grok Bot visit
+# Quickstart: offline first, then a reviewed Grok Bot setup
 
 [中文](quickstart.zh-CN.md) · [Home](../README.md)
 
-This is package version **0.1.4.dev9**. Use a new installation and a fictional workspace for the first run.
+This is the unpublished **0.1.4b1 Beta candidate**. Use a new installation and a fictional workspace first. For offline evaluation, stop after the demo; no account or credential is required. [Support matrix](beta-support.md) · [Cursor/Codex clients](client-compatibility.md) · [FAQ](faq.md).
 
 ## 1. Obtain and install this candidate
 

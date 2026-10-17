@@ -2,7 +2,7 @@
 
 ## Report a problem
 
-After this repository is published, use the host's private security advisory. Do not send webhook URLs, keys, or credential blobs.
+Use GitHub's private vulnerability reporting when it is available in this repository's Security tab. If unavailable, contact the maintainer privately through GitHub without disclosing the vulnerability details in a public Issue. Never include webhook URLs, keys, local diagnostics, real task IDs or credential blobs. No response-time SLA is promised.
 
 ## What this bridge checks
 
@@ -37,3 +37,7 @@ The bridge cannot see remaining quota, cannot turn on on-demand billing, and doe
 See docs/security/THREAT_MODEL.md and docs/security/CREDENTIAL_LIFECYCLE.md. Do not report a vulnerability in a public Issue or test a discovered key. Use GitHub private vulnerability reporting only when actually available; if it is not enabled, request a private channel without posting the sensitive details. No maintainer response SLA is claimed.
 
 P0 hardening rejects ambiguous/nonfinite/deep JSON, hardlinked evidence/allowed files and unsafe literal Webhook destinations. It does not authenticate DNS ownership, prevent DNS rebinding, independently measure Bot-reported tests, or confine an external process. A read-only profile blocks execution but is not an OS read-only token; isolated-write profiles are unsupported. Historical results remain frozen.
+
+## Public Beta support and data boundaries
+
+See [Beta support](docs/beta-support.md) and [data boundaries](docs/data-boundaries.md). The workflow's test and release artifacts must contain fictional data only. Executing desktop commands requires separate operator permission; a policy label alone cannot confine an external agent. Report uncertain submission states without retrying.

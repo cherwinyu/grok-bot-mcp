@@ -1,11 +1,12 @@
 # Changelog
 
-## 0.1.4.dev9
+## 0.1.4b1 (candidate, not yet published)
 
-Initial source import of the Windows MCP bridge.
+- First standalone Public Beta candidate in a clean repository without the private development history.
+- Add read-only Cursor JSON and Codex CLI TOML configuration fragments and Unicode/TOML validation.
+- Retain seven MCP tools, the original ledger, claim-once and frozen-evidence behavior.
+- Preserve the Windows-local authorization topology and explicit advisory (non-OS-sandbox) security boundary.
+- Rework first-run documentation and isolated fictional tests.
+- Use one selected final release wheel for both Windows CI installation and future prerelease attachments, after a separate maintainer release approval.
 
-- Keep the Python distribution name `grokbot-mcp-bridge` and the import name `grokbot_mcp`.
-- Keep the seven stdio tools, the task ledger, single claim, and frozen-result behavior.
-- Exercise security refusals directly against this tree. This repository does not replay older development commits.
-- Continuous integration runs on Windows with Python 3.12, an installed wheel, fictional clients, and an offline demo.
-- This version is not a PyPI release, a GitHub Release, or permission to make the repository public.
+Earlier private development iterations are not shipped as history in this repository.

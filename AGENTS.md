@@ -19,3 +19,7 @@ CI uses read-only repository permissions and no live-send secrets. Do not execut
 Security regressions in this repository assert the current refusal behavior. They do not archive or replay older commits. A green CI result is not permission to publish, tag a release, or change repository visibility.
 
 Source publication, public visibility, Release or PyPI, and active deployment are independent authorizations. Raw evidence and privacy findings stay outside the source tree.
+
+## Public Beta source discipline
+
+Do not generate or modify actual MCP client configurations, Grok Bot Routines, user credentials or installed projects as part of Beta readiness. Source-only PRs may be merged to the private main after a full native Windows gate. Publication, a Git tag, a release, or switching visibility requires a separate human authorization. Preserve Python import names and all seven MCP tool signatures; do not weaken frozen evidence, fail-closed identity checks or no-resend semantics.

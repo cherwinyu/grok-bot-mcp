@@ -1,8 +1,8 @@
-# 快速开始：一个向导，一次集中 Grok Bot 操作
+# 快速开始：先离线体验，再按需配置 Grok Bot
 
 [English](quickstart.md) · [首页](../README.zh-CN.md)
 
-这是包版本 **0.1.4.dev9**。第一次运行请使用全新安装和虚构工作区。
+当前是未发布的 **0.1.4b1 Beta 候选**。首次使用应从离线演示开始，无需账号或密钥；真实配置只在用户明确审核并授权后进行。[支持矩阵](beta-support.zh-CN.md) · [Cursor/Codex 配置](client-compatibility.zh-CN.md) · [常见问题](faq.zh-CN.md)。
 
 ## 1. 获取并安装候选源码
 

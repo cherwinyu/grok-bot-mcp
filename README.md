@@ -1,65 +1,66 @@
 # grok-bot-mcp
 
-**A Windows MCP bridge for narrowly scoped, verifiable Grok Bot tasks.** Prepare one task, validate its policy, claim an execution once, and inspect the resulting code and evidence without blind resubmission.
+**Auditable AI coding task handoffs for Windows.** Prepare one narrowly scoped task for a user-configured Grok Bot Routine, claim execution once, and review Git changes and structured evidence rather than trusting a "done" message.
 
-[简体中文](README.zh-CN.md) · [Start safely](docs/quickstart.md) · [Security](SECURITY.md)
+[简体中文](README.zh-CN.md) · [Quickstart](docs/quickstart.md) · [Cursor / Codex CLI](docs/client-compatibility.md) · [Beta support](docs/beta-support.md) · [Security](SECURITY.md)
 
-**Package version `0.1.4.dev9`. Not a stable release or a hosted service.** MIT-licensed and unofficial. This is not endorsed by Grok, xAI, or Cursor. The Python distribution name remains `grokbot-mcp-bridge`; import the library as `grokbot_mcp`. This repository does not publish to PyPI.
+**0.1.4b1 Beta release candidate — currently Private, not yet published.** MIT; unofficial and not endorsed by Grok, xAI, Cursor or OpenAI. Requires Windows, Python 3.12 and Git. The distribution is `grokbot-mcp-bridge` for compatibility; import as `grokbot_mcp`. Not a hosted service, PyPI package or guaranteed quota workaround.
 
-## Try the complete offline workflow
+## Try it safely without any account
 
-Use Windows, Python 3.12 and Git. Install into a **new** virtual environment. Do not replace an active bridge.
+On Windows PowerShell, after obtaining this reviewed source, use a **new** virtual environment:
 
-```powershell
-py -3.12 -m venv C:\ExampleBridgeCandidate
-$BridgePython = 'C:\ExampleBridgeCandidate\Scripts\python.exe'
+~~~powershell
+git clone https://github.com/cherwinyu/grok-bot-mcp.git
+Set-Location grok-bot-mcp
+py -3.12 -m venv C:\ExampleBridgeBeta
+$BridgePython = 'C:\ExampleBridgeBeta\Scripts\python.exe'
 & $BridgePython -m pip install .
 & $BridgePython -I -X utf8 -m grokbot_mcp.safety_cli demo
-```
+~~~
 
-`OFFLINE_SIMULATION` creates a private temporary Git workspace, exercises the two-phase ledger, claim, and result pipeline, runs two small Python tests, demonstrates duplicate-claim and frozen-result refusal, and removes its fixture. It uses only in-memory transport and credentials. It does not log in, send a real Webhook, change a real client, or certify a remote Routine.
+Expected result includes `"mode": "OFFLINE_SIMULATION"` and `"real_webhooks_sent": 0`. It creates an owned fictional Git workspace, uses memory-only Webhook and credential doubles, actually runs two small Python tests, checks duplicate claims and frozen results, and removes the temporary fixture. It neither logs in nor proves the cloud Routine performed the fictional work. [Walkthrough](docs/offline-demo.md).
 
-## Where execution really happens
+## Why this bridge?
 
-```text
-MCP client -> local Windows bridge -> one authorized Routine Webhook
-                  |                            |
-             registered files             cloud Routine
-                  ^                            |
-                  +--- separately approved desktop commands
-```
+| Step | Capability | Boundary |
+|---|---|---|
+| Register | Administrator fixes Git root, allowed files and test command | MCP caller cannot choose arbitrary roots |
+| Prepare/validate | Bind task identity, manifest hash and Git baseline | A valid manifest is not permission to execute |
+| Execute once | Separate submission switch, durable ledger and exclusive claim | `unknown_submission` is never blindly resent |
+| Reconcile | Check result IDs, Git changes and frozen evidence | Local proof cannot independently attest external model actions |
+| Recover | Explicit migration, backup and rollback | Never silently overwrite a terminal result |
 
-The cloud computer and your Windows disk are separate. Live use requires the correct desktop to be reachable and its commands separately approved. If nobody can approve a requested command, stop. Never silently substitute a cloud path or enable Always Allow to make a test pass.
+Seven stable MCP stdio tools are retained. There is no arbitrary shell/root tool exposed over MCP.
 
-The supported protocol is the Grok Bot Routine Bearer-authenticated POST whose accepted response is HTTP 200. It is not the separate Grok Automation signing/202 protocol. A 200 is acceptance, not completion. See [the protocol sources and architecture decision](docs/adr/0001-execution-topology.md).
+## Where execution actually happens
 
-## What you get
+~~~text
+Cursor / Codex (Windows) --stdio--> local bridge
+                                       |
+                                 reviewed Webhook
+                                       |
+                                cloud Grok Bot Routine
+                                       |
+                        separately approved desktop commands
+                                       |
+                              registered local Git repo
+~~~
 
-| Capability | Boundary |
-|---|---|
-| Seven stdio MCP tools | Existing arguments and ledger; no arbitrary shell or root tool |
-| Strict result and claim evidence | JSON types, identities, frozen proof, and baseline checks; not independent human QA |
-| Runtime installation identity | Diagnose a connected server; a subprocess probe is not a real client reload |
-| Configuration switching and migration | Preview, explicit apply, backup, recovery, and conflict-aware rollback |
-| Safety tools | Permission preview, credential-maintenance plan, disabled canary creation, and read-only observation |
-| Publication tooling | Bounded Git and ZIP inspection. A clean scan is not permission to publish |
+Cloud Routines do not automatically share the Windows filesystem. Live work requires a reachable host, user-approved desktop commands, provider access, appropriate Routine configuration and credentials. HTTP 200 only means accepted.
 
-New disposable Canary registrations bind a nonempty, locally declared expected-machine label into the review hash and stored registry. That label is not remote-host authentication. New wizard registrations include an explicit Windows-local advisory execution profile. Older registries stay compatible and report that their profile is absent; they are not silently migrated. A declared read-only profile blocks execution. Cloud-shared-filesystem, unsupported provider, and claimed isolated-write profiles are rejected. Profile changes invalidate existing policy bindings.
+**Security: `advisory_precheck` is an application-level allow-list check, NOT an OS sandbox.** External tools may have broader Windows rights. Use disposable or separately restricted workspaces; never enable Always Allow to make a test succeed. [Threat model](docs/security/THREAT_MODEL.md) · [Data boundaries](docs/data-boundaries.md).
 
-## Connect a workspace deliberately
+## Connect clients deliberately
 
-Use the [wizard-first quickstart](docs/quickstart.md), the generated two-Routine packet, and the [deployment and rollback guide](docs/deployment.md). Reuse an existing Routine and Webhook when its binding can be updated. Credential presence is not binding correctness. An old `claim_dynamic.py` entry is not made compatible by inventing a claim hash.
+Generate and review a Cursor JSON or Codex CLI TOML config snippet; put it into the supported client UI yourself. The generator does not edit config or access keys.
 
-Before a real task, inspect the exact configuration and permission plan. Local observations, actual client reconnection, actual Routine execution, and human approval are four separate gates. Engineering tests use fictional clients and workspaces.
+[Client setup](docs/client-compatibility.md) · [Wizard quickstart](docs/quickstart.md) · [FAQ](docs/faq.md).
 
-## Safety first
+Native Windows CI checks installed wheel, snippet formats and fictional stdio. It **does not establish actual user-client UI reconnect or live Grok Bot results**. [Support matrix](docs/beta-support.md).
 
-The allow-list is **application-level `advisory_precheck`, not an OS sandbox**. The Bot's actual tools may have wider permissions. Use a disposable or independently restricted environment, keep credentials and unrelated projects outside it, and review the diff yourself. The bridge cannot attest that an external agent stayed within OS permissions or that self-reported tests really ran.
+## Community and release
 
-`unknown_submission` never permits resending. No maintenance tool turns on a real switch, manufactures claims, overwrites frozen terminal evidence, or grants human QA. Default outputs are not universally anonymous; share only explicit reconstructed exports.
+[Issues](https://github.com/cherwinyu/grok-bot-mcp/issues) · [Contribute](CONTRIBUTING.md) · [Release procedure](docs/release-process.md) · [MIT](LICENSE) · [NOTICE](NOTICE.md) · [Changelog](CHANGELOG.md).
 
-[Result contract](docs/result-contract.md) · [Troubleshooting](docs/troubleshooting.md) · [Development](docs/development.md) · [Contributing](CONTRIBUTING.md) · [Roadmap](ROADMAP.md)
-
-Pinned SDK: `mcp==2.3.0`. Read [LICENSE](LICENSE) and [NOTICE.md](NOTICE.md). A source commit is not installation, publication, or remote acceptance.
-
-This repository's Git history starts at its initial commit. It does not carry earlier private development history, and its tests do not replay those older trees.
+No GitHub Release/Tag or PyPI publication exists until separately authorized. This repository does not include the private development Git history or its internal task logs.
