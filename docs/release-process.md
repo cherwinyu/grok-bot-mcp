@@ -16,6 +16,10 @@ This document is **not** authority to change visibility, create a Git tag, publi
 - Build the public source ZIP, sdist, wheel and SHA256SUMS via the reviewed source-scanning builder.
 - Stage the **same byte-identical release wheel** in the isolated wheelhouse used for native Windows installed-package, stdio and fictional two-installation tests. A second pip-built wheel is not a substitute.
 - Verify METADATA, RECORD, source-tree package correspondence, the sdist's full source-file identity (allowing only reviewed generated metadata), and exact SHA256SUMS entries; preserve clean release artifacts separately from dependency wheels and private logs.
+- Archive member bytes and the exact source tree must remain unchanged after timestamp canonicalization. The canonical metadata epoch is 1980-01-01 UTC for ZIP/TAR members and zero gzip-header mtime; **these dates are not commit/authorship evidence**.
+- The isolated Python build backend is explicitly fixed at `setuptools==84.0.0` (CI frontend uses `build==1.2.2`) so routine upstream backend upgrades cannot silently change archival contents.
+- The native Windows gate rebuilds the exact release after a wall-clock delay and compares full `SHA256SUMS.txt` manifests, refusing any nondeterminism before installed-wheel tests.
+- PR and squash-merged `main` builds with the same source tree must produce the same three archive hashes; differing hashes block release.
 - Any source or release-note change after QA creates a NEW candidate and must rerun the complete gate.
 
 ## Platform, governance and explicit approval

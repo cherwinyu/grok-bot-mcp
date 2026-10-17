@@ -35,6 +35,16 @@ jobs:
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python scripts/build_release.py
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $firstChecksums = Get-Content -Raw dist/SHA256SUMS.txt
+          # Rebuild after wall-clock time advances; the same exact source
+          # must yield identical checked release assets.
+          Start-Sleep -Seconds 3
+          python scripts/build_release.py
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $secondChecksums = Get-Content -Raw dist/SHA256SUMS.txt
+          if ($firstChecksums -cne $secondChecksums) {
+            throw "The exact same source tree produced differing release archive hashes"
+          }
           $releaseWheels = @(Get-ChildItem dist/grokbot_mcp_bridge-*.whl)
           if ($releaseWheels.Count -ne 1) { throw "Expected exactly one audited wheel" }
           $releaseWheel = $releaseWheels[0]
