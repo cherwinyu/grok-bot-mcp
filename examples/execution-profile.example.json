@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "protocol": "grok_bot_routine_bearer_v1",
+  "topology": "windows_local",
+  "mode": "advisory_write",
+  "desktop_approval": "per_command"
+}

@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "grokbot-mcp": {
+      "command": "C:\\ExamplePython\\python.exe",
+      "args": ["-I", "-X", "utf8", "-m", "grokbot_mcp.server"],
+      "env": {"GROKBOT_MCP_REGISTRY": "C:\\ExampleConfig\\registry.json"}
+    }
+  }
+}

@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "source_commit": "0000000000000000000000000000000000000000",
+  "evidence": {
+    "native_tests": {
+      "status": "NOT_RUN",
+      "file": null,
+      "sha256": null
+    },
+    "installed_package": {
+      "status": "NOT_RUN",
+      "file": null,
+      "sha256": null
+    },
+    "source_scan": {
+      "status": "NOT_RUN",
+      "file": null,
+      "sha256": null
+    },
+    "archive_scan": {
+      "status": "NOT_RUN",
+      "file": null,
+      "sha256": null
+    },
+    "protocol_review": {
+      "status": "NOT_RUN",
+      "file": null,
+      "sha256": null
+    },
+    "privacy_scope_review": {
+      "status": "NOT_RUN",
+      "file": null,
+      "sha256": null
+    },
+    "client_acceptance": {
+      "status": "NOT_RUN",
+      "file": null,
+      "sha256": null
+    },
+    "routine_acceptance": {
+      "status": "NOT_RUN",
+      "file": null,
+      "sha256": null
+    },
+    "security_review": {
+      "status": "NOT_RUN",
+      "file": null,
+      "sha256": null
+    }
+  }
+}

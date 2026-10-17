@@ -1,0 +1,34 @@
+name: Bug report / 缺陷
+description: Reproduce a bridge problem using fictional data only
+title: "[Bug] "
+body:
+  - type: markdown
+    attributes:
+      value: "Do not include keys, Webhook URLs, private paths, real ledgers, or screenshots of credentials. Security vulnerabilities belong in the private advisory channel."
+  - type: input
+    id: version
+    attributes:
+      label: Bridge version and exact source commit
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Windows / Python / Git / MCP client versions
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Fictional reproduction, expected and actual behavior, stable error code
+    validations:
+      required: true
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Evidence boundary
+      options:
+        - label: I included no secret, real task payload, or private diagnostic output.
+          required: true
+        - label: I did not resend an unknown submission to reproduce this issue.
+          required: true

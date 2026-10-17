@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "grokbot-mcp-bridge"
+version = "0.1.4.dev9"
+description = "Unofficial local MCP bridge for administrator-registered Grok Bot webhook routines"
+readme = "README.md"
+requires-python = ">=3.12"
+license = "MIT"
+license-files = ["LICENSE"]
+dependencies = ["mcp==2.3.0"]
+
+[project.scripts]
+grokbot-mcp = "grokbot_mcp.server:main"
+grokbot-mcp-claim = "grokbot_mcp.claim_cli:main"
+grokbot-mcp-setup = "grokbot_mcp.setup_wizard:main"
+
+grokbot-client = "grokbot_mcp.client_cli:main"
+grokbot-result = "grokbot_mcp.result_cli:main"
+grokbot-migrate = "grokbot_mcp.migration_cli:main"
+grokbot-agent = "grokbot_mcp.agent_cli:main"
+grokbot-safety = "grokbot_mcp.safety_cli:main"
+
+[tool.setuptools.package-data]
+grokbot_mcp = ["templates/*.md"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[project.urls]
+Repository = "https://github.com/cherwinyu/grok-bot-mcp"
+Documentation = "https://github.com/cherwinyu/grok-bot-mcp/tree/main/docs"
+Issues = "https://github.com/cherwinyu/grok-bot-mcp/issues"

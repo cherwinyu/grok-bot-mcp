@@ -1,0 +1,10 @@
+{
+  "protocol_version": 1,
+  "manifest_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "machine": "EXAMPLE-PC",
+  "workspace_id": "example-workspace",
+  "cursor_cloud_agent_used": false,
+  "action": "validate_manifest",
+  "status": "running",
+  "task_id": "00000000-0000-4000-8000-000000000001"
+}

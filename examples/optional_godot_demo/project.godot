@@ -1,0 +1,7 @@
+; Engine configuration file.
+config_version=5
+
+[application]
+
+config/name="ExampleGrid"
+config/features=PackedStringArray("4.4")

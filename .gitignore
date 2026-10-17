@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+dist/
+build/
+*.egg-info/
+.coverage
+htmlcov/
+*.log
+.bridge/
+OpenSource/
+_private_release_audit/
+private-markers.json

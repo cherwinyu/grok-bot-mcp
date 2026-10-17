@@ -1,0 +1,17 @@
+{
+  "protocol_version": 1,
+  "manifest_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "machine": "EXAMPLE-PC",
+  "workspace_id": "example-workspace",
+  "cursor_cloud_agent_used": false,
+  "action": "execute_manifest",
+  "status": "failed",
+  "execution_id": "00000000-0000-4000-8000-000000000002",
+  "manifest_task_id": "00000000-0000-4000-8000-000000000001",
+  "code_modified": false,
+  "changed_files": [],
+  "tests": {
+    "command_id": "python_unittest",
+    "not_run": true
+  }
+}
