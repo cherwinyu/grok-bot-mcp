@@ -51,14 +51,26 @@ jobs:
       - name: Native fictional two-installation client acceptance
         shell: pwsh
         run: python scripts/native_deployment_acceptance.py --wheelhouse "$env:RUNNER_TEMP/wheelhouse" --output "$env:RUNNER_TEMP/reliability-evidence"
-      - name: Memory-only offline demo
+      - name: Memory-only offline demo from a fresh installed release wheel
         shell: pwsh
         run: |
+          $ErrorActionPreference = "Stop"
+          $demoVenv = Join-Path $env:RUNNER_TEMP "beta-demo-env"
+          python -m venv "$demoVenv"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $demoPython = Join-Path $demoVenv "Scripts/python.exe"
+          $auditedWheel = (Get-ChildItem dist/grokbot_mcp_bridge-*.whl).FullName
+          & $demoPython -m pip install --no-index --find-links "$env:RUNNER_TEMP/wheelhouse" "$auditedWheel"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
           Push-Location $env:RUNNER_TEMP
-          python -I -X utf8 -m grokbot_mcp.safety_cli demo > "$env:RUNNER_TEMP/reliability-evidence/offline-demo.json"
+          & $demoPython -I -X utf8 -m grokbot_mcp.safety_cli demo > "$env:RUNNER_TEMP/reliability-evidence/offline-demo.json"
           $status = $LASTEXITCODE
           Pop-Location
-          exit $status
+          if ($status) { exit $status }
+          $result = Get-Content -Raw "$env:RUNNER_TEMP/reliability-evidence/offline-demo.json" | ConvertFrom-Json
+          if ($result.ok -ne $true -or $result.mode -ne "OFFLINE_SIMULATION" -or $result.real_webhooks_sent -ne 0) {
+            throw "Offline demo safety contract refused"
+          }
       - name: Scan the exact final release archives
         shell: pwsh
         run: |
