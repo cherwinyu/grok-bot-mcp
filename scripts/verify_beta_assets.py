@@ -13,6 +13,7 @@ import json
 from pathlib import Path
 import re
 import sys
+import tarfile
 import tomllib
 import zipfile
 
@@ -79,6 +80,69 @@ def record_members(archive: zipfile.ZipFile) -> int:
     return len(checked)
 
 
+
+SDIST_GENERATED = frozenset({
+    "PKG-INFO", "setup.cfg",
+    "src/grokbot_mcp_bridge.egg-info/PKG-INFO",
+    "src/grokbot_mcp_bridge.egg-info/SOURCES.txt",
+    "src/grokbot_mcp_bridge.egg-info/dependency_links.txt",
+    "src/grokbot_mcp_bridge.egg-info/entry_points.txt",
+    "src/grokbot_mcp_bridge.egg-info/requires.txt",
+    "src/grokbot_mcp_bridge.egg-info/top_level.txt",
+})
+# Setuptools emits CODEOWNERS in the reviewed source ZIP but not in the sdist.
+SDIST_SOURCE_EXCLUSIONS = frozenset({".github/CODEOWNERS"})
+
+
+def sdist_members(raw: bytes, source_files: dict[str, bytes], version: str) -> int:
+    """Prove that every shipped sdist source file matches the audited source ZIP.
+
+    Only reviewed setuptools-generated metadata and a known CODEOWNERS omission
+    are accepted. This is source identity checking, not a license/privacy approval.
+    """
+    if len(raw) > 64 * 1024 * 1024:
+        raise CandidateError("sdist_limit_exceeded")
+    prefix = f"grokbot_mcp_bridge-{version}/"
+    expected = set(source_files) - SDIST_SOURCE_EXCLUSIONS
+    seen: dict[str, bytes] = {}
+    total = 0
+    try:
+        with tarfile.open(fileobj=io.BytesIO(raw), mode="r:gz") as archive:
+            for item in archive:
+                # setuptools places one root directory named without a slash.
+                if item.isdir() and item.name == prefix[:-1]:
+                    continue
+                if not item.name.startswith(prefix):
+                    raise CandidateError("sdist_path_invalid")
+                name = item.name[len(prefix):].rstrip("/") if item.isdir() else item.name[len(prefix):]
+                if not name or any(part in {"", ".", ".."} for part in name.split("/")):
+                    raise CandidateError("sdist_path_invalid")
+                if item.isdir():
+                    continue
+                if not item.isfile():
+                    raise CandidateError("sdist_special_member")
+                if name in seen:
+                    raise CandidateError("sdist_duplicate_member")
+                if item.size > 4 * 1024 * 1024 or total + item.size > 64 * 1024 * 1024:
+                    raise CandidateError("sdist_limit_exceeded")
+                member = archive.extractfile(item)
+                if member is None:
+                    raise CandidateError("sdist_member_unreadable")
+                data = member.read(item.size + 1)
+                if len(data) != item.size:
+                    raise CandidateError("sdist_member_unreadable")
+                seen[name] = data
+                total += len(data)
+    except (OSError, EOFError, tarfile.TarError):
+        raise CandidateError("sdist_unreadable") from None
+    if set(seen) != expected | SDIST_GENERATED:
+        raise CandidateError("sdist_source_file_set_mismatch")
+    for name in expected:
+        if seen[name] != source_files[name]:
+            raise CandidateError("sdist_source_content_mismatch")
+    return len(expected)
+
+
 def verify(root: Path, wheelhouse: Path) -> dict:
     root, wheelhouse = root.absolute(), wheelhouse.absolute()
     version = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))["project"]["version"]
@@ -109,9 +173,12 @@ def verify(root: Path, wheelhouse: Path) -> dict:
         expected_source = {p.relative_to(root).as_posix() for p in public_files(root)}
         if set(archive.namelist()) != expected_source:
             raise CandidateError("source_archive_manifest_mismatch")
-        for name in expected_source:
-            if archive.read(name) != (root / name).read_bytes():
+        source_files = {name: archive.read(name) for name in expected_source}
+        for name, content in source_files.items():
+            if content != (root / name).read_bytes():
                 raise CandidateError("source_archive_content_mismatch")
+
+    sdist_count = sdist_members((dist / sdist_name).read_bytes(), source_files, version)
 
     with zipfile.ZipFile(dist / wheel_name) as archive:
         count = record_members(archive)
@@ -134,7 +201,8 @@ def verify(root: Path, wheelhouse: Path) -> dict:
         "ok": True, "version": version, "release_wheel": wheel_name,
         "wheel_sha256": listed[wheel_name], "source_sha256": listed[source_name],
         "sdist_sha256": listed[sdist_name], "wheel_record_rows": count,
-        "package_source_members_checked": checked_source, "installed_exact_release_wheel": True,
+        "package_source_members_checked": checked_source, "sdist_source_members_checked": sdist_count,
+        "installed_exact_release_wheel": True,
         "publication_authorized": False, "public_release_created": False,
     }
 

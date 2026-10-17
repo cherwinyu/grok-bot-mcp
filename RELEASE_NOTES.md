@@ -22,4 +22,4 @@ Follow README.md and docs/quickstart.md, install from the reviewed Release wheel
 & $BridgePython -I -X utf8 -m grokbot_mcp.safety_cli demo
 ~~~
 
-Source archive and package SHA-256 will accompany an authorized GitHub Beta prerelease. A release must not be created from an unreviewed branch or a different wheel.
+The sdist's source members are byte-checked against the reviewed source ZIP; reviewed generated setuptools metadata is the only exception. Source archive and package SHA-256 will accompany an authorized GitHub Beta prerelease. A release must not be created from an unreviewed branch or a different wheel.

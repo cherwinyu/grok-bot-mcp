@@ -42,4 +42,4 @@ env = { GROKBOT_MCP_REGISTRY = "C:\\Example Config\\registry.json" }
 
 **必须区分四层证据：** 生成正确配置、独立 stdio 连接、真实客户端重连、真实 Grok Bot Routine 和人工批准。HTTP 200 只表示接收；advisory_precheck 不是 OS 沙箱；未知提交不可重发。
 
-参考：[Codex MCP 官方说明](https://learn.chatgpt.com/docs/extend/mcp)、[Codex 配置规范](https://learn.chatgpt.com/docs/config-file/config-reference)、[Cursor MCP 文档](https://docs.cursor.com/context/model-context-protocol)。核查日期：2026-10-17。
+参考：[Codex MCP 官方说明](https://learn.chatgpt.com/docs/extend/mcp)、[Codex 配置规范](https://learn.chatgpt.com/docs/config-file/config-reference)、[Cursor MCP 文档](https://cursor.com/docs/mcp)。核查日期：2026-10-17。

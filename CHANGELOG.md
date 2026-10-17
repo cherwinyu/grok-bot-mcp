@@ -8,5 +8,7 @@
 - Preserve the Windows-local authorization topology and explicit advisory (non-OS-sandbox) security boundary.
 - Rework first-run documentation and isolated fictional tests.
 - Use one selected final release wheel for both Windows CI installation and future prerelease attachments, after a separate maintainer release approval.
+- Independently verify that every shipped sdist source file matches the audited source ZIP; reject extra, missing, modified and special members.
+- Update client setup documentation to the current direct Cursor MCP documentation page.
 
 Earlier private development iterations are not shipped as history in this repository.

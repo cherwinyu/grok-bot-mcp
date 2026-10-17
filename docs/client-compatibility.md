@@ -48,4 +48,4 @@ Do not overwrite unknown user configuration or paste credentials, URLs, task fil
 4. Grok Bot Routine status, separately approved Windows desktop commands, real claim/result evidence and independent QA are separate gates. HTTP 200 is only submission acceptance, not execution success.
 5. The app-level advisory_precheck is not an OS sandbox. Unknown submission is never safe to blindly resend.
 
-Sources reviewed on 2026-10-17: [Codex MCP docs](https://learn.chatgpt.com/docs/extend/mcp), [Codex configuration reference](https://learn.chatgpt.com/docs/config-file/config-reference), [Cursor MCP documentation](https://docs.cursor.com/context/model-context-protocol). Client releases can change; versions and entitlements must be retested before a stable support claim.
+Sources reviewed on 2026-10-17: [Codex MCP docs](https://learn.chatgpt.com/docs/extend/mcp), [Codex configuration reference](https://learn.chatgpt.com/docs/config-file/config-reference), [Cursor MCP documentation](https://cursor.com/docs/mcp). Client releases can change; versions and entitlements must be retested before a stable support claim.

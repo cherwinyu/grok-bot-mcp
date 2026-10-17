@@ -15,7 +15,7 @@ This document is **not** authority to change visibility, create a Git tag, publi
 - Ensure the same version appears in pyproject.toml and the Python package.
 - Build the public source ZIP, sdist, wheel and SHA256SUMS via the reviewed source-scanning builder.
 - Stage the **same byte-identical release wheel** in the isolated wheelhouse used for native Windows installed-package, stdio and fictional two-installation tests. A second pip-built wheel is not a substitute.
-- Verify METADATA, RECORD, source-tree package correspondence and exact SHA256SUMS entries; preserve clean release artifacts separately from dependency wheels and private logs.
+- Verify METADATA, RECORD, source-tree package correspondence, the sdist's full source-file identity (allowing only reviewed generated metadata), and exact SHA256SUMS entries; preserve clean release artifacts separately from dependency wheels and private logs.
 - Any source or release-note change after QA creates a NEW candidate and must rerun the complete gate.
 
 ## Platform, governance and explicit approval
