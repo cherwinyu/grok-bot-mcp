@@ -1,6 +1,6 @@
 # Contributing
 
-Issues and patches are welcome. This tree is a private source snapshot until the maintainer says otherwise.
+Issues and patches are welcome. This is an experimental Beta release candidate. Contributions should use fictional test data, an isolated branch and a reviewed pull request.
 
 - Run the Windows Python 3.12 workflow, including the installed-wheel unittest, before asking for review.
 - Do not add a real webhook URL, key, machine name, or private workspace path.
@@ -13,4 +13,4 @@ Pull requests must not print secrets in logs. `scripts/scan_release.py` should s
 
 Negative tests must fail for the behavior under test, not because an import or fixture is missing. Do not delete an assertion to make the suite green. Historical development commits are not stored here, so do not add a gate that needs some other repository's Git objects.
 
-Read AGENTS.md before changing authority or protocol. See CODE_OF_CONDUCT.md for community behavior and SECURITY.md for confidential reporting.
+Before contributing, read docs/beta-support.md, docs/data-boundaries.md and AGENTS.md. All reported CI test successes are offline; changes to real provider/desktop authority require separate approval. Read AGENTS.md before changing authority or protocol. See CODE_OF_CONDUCT.md for community behavior and SECURITY.md for confidential reporting.

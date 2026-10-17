@@ -14,6 +14,7 @@ def main(argv=None) -> int:
         parser.add_argument("operation", choices=("inspect", "fragment", "switch", "rollback", "recover", "compare", "transactions"))
         parser.add_argument("--config", type=Path)
         parser.add_argument("--server", default="grokbot-mcp")
+        parser.add_argument("--format", choices=("cursor-json", "codex-toml"), default="cursor-json")
         parser.add_argument("--workspace")
         parser.add_argument("--python", type=Path)
         parser.add_argument("--registry", type=Path)
@@ -33,11 +34,18 @@ def main(argv=None) -> int:
             raise LocalError("invalid_arguments")
         if args.probe and args.operation != "inspect":
             raise LocalError("invalid_arguments")
+        if args.format == "codex-toml" and args.operation != "fragment":
+            raise LocalError("invalid_arguments")
         if args.operation == "fragment":
             if not all((args.python, args.registry, args.workspace)):
                 raise LocalError("invalid_arguments")
-            result = {"mcpServers": {args.server: client.fragment(args.python.absolute(), args.registry.absolute(), args.workspace)},
-                      "scope": "local configuration fragment only; no file has been changed"}
+            selected = client.fragment(args.python.absolute(), args.registry.absolute(), args.workspace)
+            if args.format == "codex-toml":
+                from grokbot_mcp.codex_config import fragment_toml
+                result = fragment_toml(args.server, selected)
+            else:
+                result = {"mcpServers": {args.server: selected},
+                          "scope": "local configuration fragment only; no file has been changed"}
         else:
             if not args.config:
                 raise LocalError("invalid_arguments")
@@ -75,6 +83,9 @@ def main(argv=None) -> int:
             from grokbot_mcp.deployment_diagnostics import export, public_report
             export(args.export.absolute(), result, args.registry.absolute())
             result = public_report(result)
+        if args.operation == "fragment" and args.format == "codex-toml":
+            print(result, end="")
+            return 0
         emit(result)
         return 1 if result.get("ok") is False or result.get("identity_matches") is False else 0
     except Exception as exc:
