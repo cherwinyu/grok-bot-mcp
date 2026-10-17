@@ -13,8 +13,10 @@ from pathlib import Path
 
 if __package__:
     from .scan_release import _link, _scan_archive, _scan_tree, load_markers
+    from .reproducible_archives import canonicalize_release
 else:
     from scan_release import _link, _scan_archive, _scan_tree, load_markers
+    from reproducible_archives import canonicalize_release
 
 ROOT_FILES = (
     ".gitattributes", ".gitignore", "LICENSE", "MANIFEST.in", "pyproject.toml",
@@ -81,6 +83,7 @@ def main() -> int:
                     archive.write(path, path.relative_to(stage).as_posix())
         # The build frontend builds the wheel from the sdist as well.
         subprocess.run([sys.executable, "-m", "build", str(stage), "--outdir", str(outputs)], check=True)
+        canonicalize_release(outputs)
         artifacts = sorted(outputs.iterdir())
         if len(artifacts) != 3:
             raise ValueError("unexpected_artifact_count")
