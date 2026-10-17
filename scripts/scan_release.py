@@ -24,7 +24,7 @@ PATH_PATTERNS = (re.compile(r"[A-Za-z]:\\Users\\"), re.compile(r"[A-Za-z]:/Users
 ALLOWED_URL_HOSTS = {
     "modelcontextprotocol.io", "www.python.org", "github.com", "docs.github.com",
     "opensource.org", "spdx.org", "example.invalid", "example.com",
-    "cursor.com", "docs.x.ai", "git-lfs.github.com",
+    "cursor.com", "docs.cursor.com", "learn.chatgpt.com", "docs.x.ai", "git-lfs.github.com",
 }
 # Reviewed synthetic transport-denial inputs; never a blanket test exemption.
 # URLs are fixed non-secret fixtures. Key/private-marker rules still apply.
