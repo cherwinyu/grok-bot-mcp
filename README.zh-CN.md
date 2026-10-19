@@ -1,6 +1,6 @@
 # grok-bot-mcp
 
-**让 Windows 上的 AI 编码任务交接更可审查、更可恢复。** 将范围明确的任务交给自行配置的 Grok Bot Routine，单次领取，用 Git 差异与结构化证据核验交付，而不是相信一句“完成了”。
+**Windows 上的本地 MCP Bridge：把范围明确的编码任务交给你自配的 Grok Bot Routine 单次执行，再用 Git 差异和结构化证据验收，而不是相信一句「完成了」。**
 
 [English](README.md) · [快速开始](docs/quickstart.zh-CN.md) · [Cursor / Codex CLI](docs/client-compatibility.zh-CN.md) · [Beta 支持范围](docs/beta-support.zh-CN.md) · [安全声明](SECURITY.md)
 
