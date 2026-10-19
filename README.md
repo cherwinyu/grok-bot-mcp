@@ -1,6 +1,6 @@
 # grok-bot-mcp
 
-**Auditable AI coding task handoffs for Windows.** Prepare one narrowly scoped task for a user-configured Grok Bot Routine, claim execution once, and review Git changes and structured evidence rather than trusting a "done" message.
+**Local MCP bridge for Windows: hand a scoped coding task to your Grok Bot Routine once, then verify the result with Git diffs and structured evidence—not a "done" chat reply.**
 
 [简体中文](README.zh-CN.md) · [Quickstart](docs/quickstart.md) · [Cursor / Codex CLI](docs/client-compatibility.md) · [Beta support](docs/beta-support.md) · [Security](SECURITY.md)
 
