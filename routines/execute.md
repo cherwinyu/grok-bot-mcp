@@ -28,7 +28,7 @@ Replace `C:\ExamplePython\python.exe` and `example-workspace` with your install 
 5. Edit only those files to satisfy `acceptance_criteria`.
 6. Do not call another coding agent. Do not `git commit` or `git push`.
 7. Run the test named by `test_command_id`. For the example workspace that command id is `python_unittest`. The bridge does not shell out to it for you.
-8. Prepare a candidate for `.bridge/results_execute/<execution_id>.json`:
+8. Prepare the private candidate only at `%TEMP%\grokbot-mcp-candidates\execute\.<execution_id>.result.tmp` (UTF-8, no BOM). Do not write `.result.candidate.json` or any other candidate name inside the workspace. Publish through the result helper, which stages `.bridge/results_execute/.<execution_id>.result.tmp` and then writes `.bridge/results_execute/<execution_id>.json`. The result fields are:
    - `protocol_version`: 1
    - `action`: `execute_manifest`
    - `execution_id`

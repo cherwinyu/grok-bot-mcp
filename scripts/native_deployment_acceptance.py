@@ -40,6 +40,14 @@ def snapshot(root):
             for p in root.rglob("*") if p.is_file() and p.name != ".submit.lock"}
 
 
+def acceptance_candidate(phase, identity):
+    """The only --source result_cli accepts: the private temp candidate."""
+    from grokbot_mcp.result_cli import private_candidate_path
+    source = private_candidate_path(phase, identity)
+    source.parent.mkdir(parents=True, exist_ok=True)
+    return source
+
+
 @asynccontextmanager
 async def connect(config):
     from mcp import ClientSession
@@ -214,18 +222,20 @@ def worker(args):
     assert facade.submit_validation_tool(WORKSPACE_ID, task["task_id"])["accepted"]
     vdata = proof(task["task_id"], task["manifest_sha256"], ["src/counter.py"])
     def publish_result(phase, identity, data):
-        source = base / (phase+" candidate.json")
-        source.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+        source = acceptance_candidate(phase, identity)
+        raw = json.dumps(data, ensure_ascii=False).encode("utf-8")
+        source.write_bytes(raw)
         fields = [*common, "--phase", phase, "--id", identity]
-        before_ledger = snapshot(workspace_root / ".bridge" / ("tasks_v2" if phase == "validate" else "executions"))
+        ledger = "tasks_v2" if phase == "validate" else "executions"
+        before_ledger = snapshot(workspace_root / ".bridge" / ledger)
         checked = cli(python_a, "result_cli", *fields, "--source", source)
         staged = cli(python_a, "result_cli", *fields, "--source", source, "--stage", "--confirm-sha256", checked["staged_sha256"])
         stage = workspace_root / staged["staging_path"]
         checked2 = cli(python_a, "result_cli", *fields, "--staged", stage)
         output = cli(python_a, "result_cli", *fields, "--staged", stage, "--publish", "--confirm-sha256", checked2["staged_sha256"])
         assert output["published"] and not output["bridge_accepted"] and not output["qa_accepted"]
-        assert snapshot(workspace_root / ".bridge" / ("tasks_v2" if phase == "validate" else "executions")) == before_ledger
-        return fields, stage
+        assert snapshot(workspace_root / ".bridge" / ledger) == before_ledger
+        return fields, stage, raw
     publish_result("validate", task["task_id"], vdata)
     assert facade.get_status(WORKSPACE_ID, task_id=task["task_id"])["validation"]["status"] == "succeeded"
     execution = facade.prepare_execution_tool(WORKSPACE_ID, task["task_id"])
@@ -243,18 +253,21 @@ def worker(args):
     assert measured["case_count"] == 1 and measured["passed"] == 1
     edata = execution_result(execution["execution_id"], task["task_id"], task["manifest_sha256"], ["src/counter.py"])
     edata["tests"].update(measured, unit="test_cases")
-    bad_source = base / "bad count.json"
+    bad_source = acceptance_candidate("execute", execution["execution_id"])
     bad = json.loads(json.dumps(edata))
     bad["tests"]["passed"] = True
-    bad_source.write_text(json.dumps(bad), encoding="utf-8")
+    bad_source.write_bytes(json.dumps(bad, ensure_ascii=False).encode("utf-8"))
     refused = cli(python_a, "result_cli", *common, "--phase", "execute", "--id", execution["execution_id"], "--source", bad_source, expected=1)
     assert refused["diagnostic"]["category"] == "format_error"
-    fields, stage = publish_result("execute", execution["execution_id"], edata)
+    fields, stage, raw = publish_result("execute", execution["execution_id"], edata)
     assert facade.get_status(WORKSPACE_ID, execution_id=execution["execution_id"])["execution"]["status"] == "succeeded"
-    frozen = current_hash(workspace_root / ".bridge/results_execute" / (execution["execution_id"]+".json"))
+    published = workspace_root / ".bridge/results_execute" / (execution["execution_id"]+".json")
+    frozen = current_hash(published)
+    # Terminal publication removes the staged file. Rewriting it must still be refused.
+    stage.write_bytes(raw)
     refused = cli(python_a, "result_cli", *fields, "--staged", stage, expected=1)
     assert refused["diagnostic"]["code"] == "result_terminal_frozen"
-    assert frozen == current_hash(workspace_root / ".bridge/results_execute" / (execution["execution_id"]+".json"))
+    assert frozen == current_hash(published)
     assert len(transport.calls) == 2
     records.append("measured fictional test -> actual claim CLI -> stage/precheck/publish -> frozen terminal refusal")
     records.append("all submissions were in-memory MockTransport, zero external Webhooks")

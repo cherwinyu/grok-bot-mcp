@@ -30,9 +30,14 @@ class ProtocolTest(unittest.TestCase):
     def test_missing_registry_fails_closed(self) -> None:
         os.environ["GROKBOT_MCP_REGISTRY"] = str(Path(self._tmp.name) / "absent.json")
         listed = facade.list_workspaces()
+        self.assertFalse(listed["ok"])
         self.assertEqual(listed["error"], "registry_missing")
-        self.assertEqual(listed["workspaces"], [])
+        self.assertIsNone(listed["workspaces"])
+        self.assertIn("absent.json", listed["registry_path"])
         self.assertFalse(listed["webhook_sent"])
+        from grokbot_mcp.claim_cli import parse_cli
+        _workspace, _execution, error = parse_cli(["11111111-1111-4111-8111-111111111111"])
+        self.assertEqual(error, "registry_missing")
 
     def test_unknown_workspace_and_absolute_root_argument_are_rejected(self) -> None:
         self.assertEqual(facade.preflight("not-registered")["error"], "unknown_workspace")
@@ -50,11 +55,43 @@ class ProtocolTest(unittest.TestCase):
         self.assertEqual(denied["error"], "allowed_file_outside_policy")
         self.assertFalse(denied["webhook_sent"])
 
+    def test_historical_manifest_stays_verifiable_after_constraint_upgrade(self) -> None:
+        from grokbot_mcp.manifest.store import (
+            CONSTRAINT_VERSION, ManifestError, constraint_version_accepted, load_manifest, manifest_path,
+        )
+        prepared = self._prepare()
+        path = manifest_path(self.root, prepared["task_id"])
+        document = json.loads(path.read_text(encoding="utf-8"))
+        self.assertEqual(document["constraint_version"], CONSTRAINT_VERSION)
+        self.assertNotIn("constraint_text", document)
+        document.pop("constraint_version")
+        path.write_text(json.dumps(document), encoding="utf-8")
+        loaded, _digest = load_manifest(self.root, prepared["task_id"])
+        self.assertNotIn("constraint_version", loaded)
+        self.assertTrue(constraint_version_accepted(None, present=False))
+        with patch("grokbot_mcp.manifest.store.CONSTRAINT_VERSION", CONSTRAINT_VERSION + 1):
+            self.assertTrue(constraint_version_accepted(CONSTRAINT_VERSION))
+            self.assertTrue(constraint_version_accepted(CONSTRAINT_VERSION + 1))
+            document["constraint_version"] = CONSTRAINT_VERSION
+            path.write_text(json.dumps(document), encoding="utf-8")
+            self.assertEqual(load_manifest(self.root, prepared["task_id"])[0]["constraint_version"], CONSTRAINT_VERSION)
+        document["constraint_version"] = CONSTRAINT_VERSION + 1
+        path.write_text(json.dumps(document), encoding="utf-8")
+        with self.assertRaises(ManifestError) as error:
+            load_manifest(self.root, prepared["task_id"])
+        self.assertEqual(error.exception.code, "constraint_version_unsupported")
+        for bad in (True, "1", 0, None):
+            document["constraint_version"] = bad
+            path.write_text(json.dumps(document), encoding="utf-8")
+            with self.assertRaises(ManifestError):
+                load_manifest(self.root, prepared["task_id"])
+
     def test_prepare_does_not_send_webhook(self) -> None:
         result = self._prepare()
         self.assertEqual(result["validation_status"], "valid")
         self.assertFalse(result["webhook_sent"])
         self.assertTrue(result["manifest_sha256"])
+        self.assertEqual(result["constraint_version"], 1)
 
     def test_validation_mock_then_status(self) -> None:
         prepared = self._prepare()

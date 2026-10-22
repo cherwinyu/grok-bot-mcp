@@ -29,8 +29,8 @@ _add("installation_unavailable installation_mismatch", "The isolated interpreter
      "Create a separate venv with Python 3.12 and install the checked-out source using that venv's python -m pip install .; do not replace an active installation.")
 _add("git_missing git_unavailable", "Git is missing or cannot run. / Git 缺失或无法运行。",
      "Install Git for Windows, open a new PowerShell and check git --version; rerun the same setup command.")
-_add("registry_missing", "No registry was found. / 尚未建立登记配置。",
-     "Run the setup wizard without --check to register an existing Git workspace; use the same --registry path on resume.")
+_add("registry_missing", "No registry was found. grok_list_workspaces returns ok=false rather than an empty workspace list. / 尚未建立登记配置；列出工作区不会假装成空列表。",
+     "Check that GROKBOT_MCP_REGISTRY points at an existing registry.json in this same process. A background shell does not inherit an earlier session's variables. Run the setup wizard without --check to register an existing Git workspace; use the same --registry path on resume.")
 _add("registry_unreadable registry_invalid", "The registry cannot be read or has an invalid schema. / 登记文件不可读或格式错误。",
      "Check access and the --registry selection locally. Preserve the file; compare it with the advanced registry example instead of deleting or replacing it.")
 _add("unknown_workspace", "This workspace ID is not registered. / 工作区 ID 尚未登记。",
@@ -121,6 +121,15 @@ _add("transaction_exists transaction_invalid transaction_context_mismatch transa
 _add("absolute_path_required file_missing file_unreadable parent_missing json_too_large json_encoding_invalid json_duplicate_field json_nonfinite json_incomplete_or_invalid json_object_required",
      "The selected local file/path is missing or is not complete strict UTF-8 JSON. / 所选本地路径缺失，或 JSON 不是完整、严格 UTF-8 数据。",
      "Check the explicit path locally. Finish/correct an unpublished candidate with UTF-8 and no BOM/duplicate keys. Keep existing final evidence unchanged; do not resend a Webhook.")
+_add("result_source_location_invalid",
+     "The private result candidate is not the fixed temp path for this phase and id. / 私人候选不在该阶段和 ID 的固定临时路径。",
+     "Write UTF-8 without BOM only to %TEMP%\\grokbot-mcp-candidates\\<phase>\\.<id>.result.tmp. Do not invent .result.candidate.json inside the workspace. Pass that temp file as result_cli --source.")
+_add("result_cleanup_not_terminal result_cleanup_path_invalid result_cleanup_failed result_cleanup_record_invalid result_cleanup_conflict",
+     "Protocol-file cleanup did not run, or it refused to change frozen evidence. / 协议临时文件清理未执行，或拒绝改动已冻结证据。",
+     "Cleanup deletes only this id's staged .<id>.result.tmp and the matching temp candidate after the published result is succeeded or failed. It does not delete the published JSON, the submission ledger, another id, or a non-contract name.")
+_add("constraint_version_unsupported",
+     "The manifest constraint_version is outside the supported range. / manifest 的 constraint_version 不在支持范围内。",
+     "Historical manifests omit constraint_version and remain verifiable. Accept integers from 1 through the current version. Do not require the manifest to equal the current constraint prose, and do not rewrite the manifest or its id.")
 _add("result_format_invalid result_phase_invalid result_identity_invalid result_identity_mismatch result_ledger_identity_mismatch result_manifest_mismatch result_staging_path_invalid result_staging_already_exists result_transition_invalid result_submission_not_accepted result_readback_mismatch",
      "Result format, identity, stage or accepted-task evidence did not match. / 结果格式、身份、阶段或已接受任务证据不匹配。",
      "Read the diagnostic field/expected type. Use the registered task's IDs and measured values; precheck and explicitly stage/publish only that candidate. Format validity is not test success or QA. Do not resend or invent evidence.")

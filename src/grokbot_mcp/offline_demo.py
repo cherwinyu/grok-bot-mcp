@@ -19,7 +19,7 @@ from grokbot_mcp.local_safety import LocalError, json_bytes
 from grokbot_mcp.registry import load_registry
 from grokbot_mcp.routine import confirmation
 from grokbot_mcp.storage import utc_now
-from grokbot_mcp.result_cli import stage_candidate, precheck, publish
+from grokbot_mcp.result_cli import private_candidate_path, stage_candidate, precheck, publish
 from grokbot_mcp.transport.webhook import HttpOutcome
 
 
@@ -74,16 +74,18 @@ def run_demo() -> dict:
                     "status": "succeeded", "validation_passed": True, "validation_errors": [],
                     "code_modified": False, "allowed_files": ["src/counter.py"]}
                 def deliver(phase, identity, value):
-                    source = directory / (phase + "-candidate.json")
-                    source.write_bytes(json_bytes(value))
+                    source = private_candidate_path(phase, identity)
+                    source.parent.mkdir(parents=True, exist_ok=True)
+                    raw = json_bytes(value)
+                    source.write_bytes(raw)
                     staged = stage_candidate(registry, "canary-workspace", phase, identity, source,
-                               apply=True, confirm_sha256=digest(source.read_bytes()))
+                               apply=True, confirm_sha256=digest(raw))
                     path = root / staged["staging_path"]
                     checked = precheck(registry, "canary-workspace", phase, identity, path)
                     published = publish(registry, "canary-workspace", phase, identity, path,
                                          confirm_sha256=checked["staged_sha256"])
                     _need(published["published"] and not published["bridge_accepted"], "offline_publish_failed")
-                    return path
+                    return path, raw
                 deliver("validate", task["task_id"], proof)
                 _need(facade.get_status("canary-workspace", task_id=task["task_id"])["validation"]["status"] == "succeeded", "offline_validation_failed")
                 ex = facade.prepare_execution_tool("canary-workspace", task["task_id"])
@@ -108,9 +110,11 @@ def run_demo() -> dict:
                     "manifest_task_id": task["task_id"], "manifest_sha256": task["manifest_sha256"], "machine": workspace.expected_machine,
                     "status": "succeeded", "changed_files": ["src/counter.py"], "code_modified": True,
                     "tests": {"command_id": "python_unittest", "unit": "test_cases", **measured}}
-                final = deliver("execute", ex["execution_id"], output)
+                final, raw = deliver("execute", ex["execution_id"], output)
                 verified = facade.get_status("canary-workspace", execution_id=ex["execution_id"])["execution"]
                 _need(verified["status"] == "succeeded", "offline_execution_failed")
+                # Terminal publication removes the staged file. Rewriting it must still be refused.
+                final.write_bytes(raw)
                 try:
                     precheck(registry, "canary-workspace", "execute", ex["execution_id"], final)
                 except LocalError as exc:

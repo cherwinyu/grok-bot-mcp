@@ -59,6 +59,71 @@ Generate and review a Cursor JSON or Codex CLI TOML config snippet; put it into 
 
 Native Windows CI checks installed wheel, snippet formats and fictional stdio. It **does not establish actual user-client UI reconnect or live Grok Bot results**. [Support matrix](docs/beta-support.md).
 
+## Host setup
+
+Generate the snippet with `client_cli fragment` (see [Cursor / Codex CLI](docs/client-compatibility.md)), then check the two paths in the **same** PowerShell process. A later background shell does not inherit variables set by an earlier command.
+
+~~~powershell
+$BridgePython = 'C:\Example Bridge\Scripts\python.exe'
+$Registry = 'C:\Example Config\registry.json'
+if (-not (Test-Path -LiteralPath $BridgePython)) { throw 'python_path_missing' }
+if (-not (Test-Path -LiteralPath $Registry)) { throw 'registry_path_missing' }
+& $BridgePython -I -X utf8 -c "import grokbot_mcp; print(grokbot_mcp.__version__)"
+~~~
+
+Cursor `mcp.json`:
+
+~~~json
+{
+  "mcpServers": {
+    "grokbot-mcp": {
+      "command": "C:\\Example Bridge\\Scripts\\python.exe",
+      "args": ["-I", "-X", "utf8", "-m", "grokbot_mcp.server"],
+      "env": { "GROKBOT_MCP_REGISTRY": "C:\\Example Config\\registry.json" }
+    }
+  }
+}
+~~~
+
+Codex CLI `config.toml`:
+
+~~~toml
+[mcp_servers."grokbot-mcp"]
+command = "C:\\Example Bridge\\Scripts\\python.exe"
+args = ["-I", "-X", "utf8", "-m", "grokbot_mcp.server"]
+env = { GROKBOT_MCP_REGISTRY = "C:\\Example Config\\registry.json" }
+~~~
+
+If the registry file is missing, `grok_list_workspaces` returns `ok: false`, `error: registry_missing`, and `workspaces: null`. That is not an empty registration.
+
+Write a result to the fixed temp candidate, then call `result_cli`. Do not pass the JSON to `python -c`. The filename is `.<id>.result.tmp` for both phases. Validate uses `%TEMP%\grokbot-mcp-candidates\validate\`; execute uses `...\execute\`. The helper stages `.bridge/results_v2/.<task-id>.result.tmp` or `.bridge/results_execute/.<execution-id>.result.tmp`. `.result.candidate.json` is not a protocol name.
+
+~~~powershell
+$Phase = 'validate'   # or 'execute'
+$Id = '<received task_id or execution_id>'
+$candidateDir = Join-Path $env:TEMP ("grokbot-mcp-candidates\" + $Phase)
+New-Item -ItemType Directory -Force -Path $candidateDir | Out-Null
+$candidate = Join-Path $candidateDir ('.' + $Id + '.result.tmp')
+$json = @'
+{"protocol_version": 1}
+'@
+$utf8 = New-Object System.Text.UTF8Encoding $false
+[System.IO.File]::WriteAllText($candidate, $json, $utf8)
+& $BridgePython -I -X utf8 -m grokbot_mcp.result_cli --registry $Registry --workspace demo-workspace --phase $Phase --id $Id --source $candidate
+~~~
+
+Replace the here-string with the measured result. Continue with `--stage` and `--publish` as in [result writing](routines/result-writing.md). New manifests include `constraint_version`. Historical manifests that omit it stay verifiable. Do not require the manifest to equal the current constraint prose.
+
+This repository does not host a host-side scope-correction framework. Failed receipts stay. Do not delete them or allocate a new id to resend the same submission.
+
+| Failure | What this bridge does | Entry in this repository |
+|---|---|---|
+| `registry_missing` | `grok_list_workspaces` returns `ok: false` and `workspaces: null` | Point `GROKBOT_MCP_REGISTRY` at an existing registry file in this process |
+| Result format or identity error before publish | Publication is refused. The final result and submission ledger stay unchanged | Edit the temp candidate and run `result_cli` again for the same id. Do not resend |
+| Terminal or frozen result | Replacement is refused. The failed receipt stays | No correction tool here. Do not delete or rewrite the receipt |
+| `unknown_submission` | The bridge does not resend | No correction entry. Observe the original task |
+| Staged or temp files after a terminal publish | Removes only that id's `.<id>.result.tmp` staged file and the matching temp candidate when its bytes match, then writes `.bridge/protocol_cleanup/<phase>/<id>.json` | `result_cli --phase validate --id <task-id> --cleanup`, or `--phase execute` with the execution id. It does not delete the published JSON, the submission ledger, another id, or `.result.candidate.json` |
+
 ## Community and release
 
 [Issues](https://github.com/cherwinyu/grok-bot-mcp/issues) · [Contribute](CONTRIBUTING.md) · [Release procedure](docs/release-process.md) · [MIT](LICENSE) · [NOTICE](NOTICE.md) · [Changelog](CHANGELOG.md).

@@ -66,10 +66,21 @@ def _workspace(workspace_id: str) -> tuple[Workspace | None, dict[str, object] |
 
 
 def list_workspaces() -> dict[str, object]:
+    path = default_registry_path()
     try:
-        registry, _path = _open()
+        registry = load_registry(path)
     except RegistryError as exc:
-        return {"runtime_identity": runtime_identity(), "workspaces": [], "error": exc.code, "webhook_sent": False, "execution_enabled": False}
+        # Hosts must not treat a missing registry as "zero workspaces registered".
+        return {
+            "ok": False,
+            "runtime_identity": runtime_identity(),
+            "workspaces": None,
+            "error": exc.code,
+            "registry_path": str(path),
+            "message": "The registry could not be loaded. An empty workspace list is not returned.",
+            "webhook_sent": False,
+            "execution_enabled": False,
+        }
     items = []
     for workspace in registry.values():
         items.append(
@@ -85,7 +96,13 @@ def list_workspaces() -> dict[str, object]:
                 },
             }
         )
-    return {"runtime_identity": runtime_identity(), "workspaces": items, "webhook_sent": False, "execution_enabled": execution_switch_enabled()}
+    return {
+        "ok": True,
+        "runtime_identity": runtime_identity(),
+        "workspaces": items,
+        "webhook_sent": False,
+        "execution_enabled": execution_switch_enabled(),
+    }
 
 
 def preflight(workspace_id: str) -> dict[str, object]:

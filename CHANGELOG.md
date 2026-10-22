@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- `grok_list_workspaces` returns `ok: false` and `workspaces: null` when the registry file is missing, instead of an empty workspace list.
+- Result candidates must be `%TEMP%\grokbot-mcp-candidates\<phase>\.<id>.result.tmp` for both validate and execute. `result_cli --source` rejects every other location.
+- A terminal publish removes that id's staged file and the matching temp candidate, and records the cleanup under `.bridge/protocol_cleanup/` without modifying the submission ledger or the published result. `result_cli --cleanup` repeats that limited deletion.
+- New manifests record `constraint_version`. Historical manifests that omit it remain verifiable. Verification does not require constraint-prose equality.
+- README and client docs add Cursor and Codex config shapes, path self-checks, and a PowerShell write-then-dispatch script that saves UTF-8 without a BOM.
+
 ## 0.1.4b1 (experimental Beta)
 
 - First standalone Public Beta candidate in a clean repository without the private development history.

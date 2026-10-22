@@ -14,7 +14,7 @@ Actual connected identity -> interpreter/package/entry -> credential presence (n
 ## Task boundaries / 任务边界
 Use the existing seven tools and their returned IDs. First prepare and validate the manifest. Only an accepted, frozen successful validation can support execution preparation. Execution also requires existing local switches, exact binding, and genuine schema-v2 claim evidence. Never create hashes, claims, successful test counts or proof to satisfy a gate. An integer test count is not a boolean. Preserve the difference between test cases and assertions.
 
-For result format problems, correct the unpublished candidate, use the local result precheck and explicit safe publication. A failed/frozen proof cannot be replaced. Do not resend a Webhook or allocate a new ID merely to repeat uncertain work. Pending/running are not final success. Bridge-reported success is not human QA approval.
+For result format problems, correct the unpublished candidate at `%TEMP%\grokbot-mcp-candidates\<phase>\.<id>.result.tmp` only, then use the local result precheck and explicit safe publication. Do not invent `.result.candidate.json` inside the workspace. A failed/frozen proof cannot be replaced. Do not resend a Webhook or allocate a new ID merely to repeat uncertain work. Pending/running are not final success. Bridge-reported success is not human QA approval.
 
 ## Optional integration recovery / 可选入口恢复
 Run `python -m grokbot_mcp.agent_cli check --config <explicit-agent.json>` from the reviewed installation. A missing prompt is an optional-integration fault, not a bridge-core failure. Preview `agent_cli template`, then generate into a new explicitly chosen directory with a matching plan confirmation. Never overwrite custom material automatically.

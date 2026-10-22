@@ -39,6 +39,8 @@ def main() -> int:
         for directory in ("tests", "scripts", "routines", "examples"):
             shutil.copytree(root / directory, sandbox / directory, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
         shutil.copyfile(root / "pyproject.toml", sandbox / "pyproject.toml")
+        for name in ("README.md", "README.zh-CN.md"):
+            shutil.copyfile(root / name, sandbox / name)
         check = (
             "import pathlib,sys,importlib.metadata as m,grokbot_mcp; "
             "p=pathlib.Path(grokbot_mcp.__file__).resolve(); "

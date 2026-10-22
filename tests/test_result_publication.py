@@ -1,7 +1,10 @@
 from __future__ import annotations
 import copy
+import importlib.util
 import json
 import os
+import unittest
+from pathlib import Path
 from unittest.mock import patch
 from grokbot_mcp import facade, result_cli
 from grokbot_mcp.local_safety import LocalError, current_hash
@@ -70,7 +73,10 @@ class ResultPublicationTest(DeploymentCase):
 
     def test_unobserved_terminal_also_cannot_be_overwritten(self):
         task, _, path = self.ready_validation()
+        raw = path.read_bytes()
         result_cli.publish(self.registry, WORKSPACE_ID, "validate", task["task_id"], path, confirm_sha256=current_hash(path))
+        self.assertFalse(path.exists())
+        path.write_bytes(raw)
         with self.assertRaises(LocalError) as error:
             result_cli.publish(self.registry, WORKSPACE_ID, "validate", task["task_id"], path, confirm_sha256=current_hash(path))
         self.assertEqual(error.exception.code, "result_terminal_frozen")
@@ -99,8 +105,12 @@ class ResultPublicationTest(DeploymentCase):
         before = self.files()
         report = result_cli.precheck(self.registry, WORKSPACE_ID, "execute", ex["execution_id"], path)
         self.assertEqual(before, self.files())
-        self.assertTrue(result_cli.publish(self.registry, WORKSPACE_ID, "execute", ex["execution_id"], path,
-                                          confirm_sha256=report["staged_sha256"])["published"])
+        published = result_cli.publish(self.registry, WORKSPACE_ID, "execute", ex["execution_id"], path,
+                                       confirm_sha256=report["staged_sha256"])
+        self.assertTrue(published["published"])
+        self.assertFalse(path.exists())
+        self.assertTrue(self.case.path("results_execute", ex["execution_id"]).is_file())
+        self.assertIn("protocol_cleanup", published)
         self.assertEqual(self.case.status(ex)["status"], "succeeded")
         claim = self.case.path("execution_claims", ex["execution_id"])
         self.assertEqual(before["execution_claims/"+claim.name], claim.read_bytes())
@@ -178,11 +188,97 @@ class ResultPublicationTest(DeploymentCase):
         self.assertFalse(self.case.path("results_v2", task["task_id"]).exists())
         self.assertFalse(list(path.parent.glob(".grokbot-*.tmp")))
 
+    def candidate(self, phase, identity, data):
+        path = result_cli.private_candidate_path(phase, identity)
+        self.write_json(path, data)
+        self.addCleanup(path.unlink, missing_ok=True)
+        return path
+
+    def test_source_must_be_the_temp_candidate_for_both_phases(self):
+        task, data, staged = self.ready_validation()
+        staged.unlink()
+        inside = self.root / ".bridge" / "results_v2" / ("." + task["task_id"] + ".result.candidate.json")
+        self.write_json(inside, data)
+        with self.assertRaises(LocalError) as error:
+            result_cli.stage_candidate(self.registry, WORKSPACE_ID, "validate", task["task_id"], inside)
+        self.assertEqual(error.exception.code, "result_source_location_invalid")
+        wrong_name = result_cli.candidate_root() / "validate" / (task["task_id"] + ".json")
+        self.write_json(wrong_name, data)
+        self.addCleanup(wrong_name.unlink, missing_ok=True)
+        with self.assertRaises(LocalError) as error:
+            result_cli.stage_candidate(self.registry, WORKSPACE_ID, "validate", task["task_id"], wrong_name)
+        self.assertEqual(error.exception.code, "result_source_location_invalid")
+        source = self.candidate("validate", task["task_id"], data)
+        report = result_cli.stage_candidate(self.registry, WORKSPACE_ID, "validate", task["task_id"], source)
+        self.assertEqual(report["source_contract"], "temp_candidate")
+        self.assertFalse(report["staged_written"])
+        execute_source = self.candidate("execute", task["task_id"], data)
+        with self.assertRaises(LocalError) as error:
+            result_cli.stage_candidate(self.registry, WORKSPACE_ID, "validate", task["task_id"], execute_source)
+        self.assertEqual(error.exception.code, "result_source_location_invalid")
+
+    def test_terminal_publish_cleans_contract_files_and_records_it(self):
+        task, data, path = self.ready_validation()
+        source = self.candidate("validate", task["task_id"], data)
+        staged_bytes = path.read_bytes()
+        self.assertEqual(source.read_bytes(), staged_bytes)
+        ledger = self.case.path("tasks_v2", task["task_id"]).read_bytes()
+        other = self.root / ".bridge" / "results_v2" / ("." + task["task_id"] + ".result.candidate.json")
+        self.write_json(other, data)
+        result = result_cli.publish(self.registry, WORKSPACE_ID, "validate", task["task_id"], path,
+                                    confirm_sha256=current_hash(path))
+        self.assertTrue(result["published"])
+        self.assertFalse(result["ledger_modified"])
+        self.assertFalse(path.exists())
+        self.assertFalse(source.exists())
+        self.assertTrue(other.is_file())
+        published = self.case.path("results_v2", task["task_id"])
+        self.assertTrue(published.is_file())
+        self.assertEqual(ledger, self.case.path("tasks_v2", task["task_id"]).read_bytes())
+        cleanup = result["protocol_cleanup"]
+        self.assertTrue(cleanup["cleanup_recorded"])
+        self.assertFalse(cleanup["submission_ledger_modified"])
+        self.assertEqual({item["role"] for item in cleanup["removed"]}, {"staged", "candidate"})
+        record = self.root / ".bridge" / "protocol_cleanup" / "validate" / (task["task_id"] + ".json")
+        self.assertTrue(record.is_file())
+        recorded = record.read_bytes()
+        again = result_cli.cleanup_protocol_files(self.registry, WORKSPACE_ID, "validate", task["task_id"])
+        self.assertEqual(again["removed"], [])
+        self.assertEqual(recorded, record.read_bytes())
+        self.assertTrue(published.is_file())
+        self.assertTrue(other.is_file())
+
+    def test_running_publish_keeps_the_staged_file(self):
+        task, _data, path = self.ready_validation("running")
+        result_cli.publish(self.registry, WORKSPACE_ID, "validate", task["task_id"], path, confirm_sha256=current_hash(path))
+        self.assertTrue(path.is_file())
+        self.assertFalse((self.root / ".bridge" / "protocol_cleanup").exists())
+
+    def test_cleanup_refuses_nonterminal_and_hash_mismatch_and_other_ids(self):
+        task, data, path = self.ready_validation("running")
+        result_cli.publish(self.registry, WORKSPACE_ID, "validate", task["task_id"], path, confirm_sha256=current_hash(path))
+        with self.assertRaises(LocalError) as error:
+            result_cli.cleanup_protocol_files(self.registry, WORKSPACE_ID, "validate", task["task_id"])
+        self.assertEqual(error.exception.code, "result_cleanup_not_terminal")
+        self.assertTrue(path.is_file())
+        data.update(status="succeeded", validation_passed=True, validation_errors=[])
+        self.write_json(path, data)
+        result_cli.publish(self.registry, WORKSPACE_ID, "validate", task["task_id"], path, confirm_sha256=current_hash(path))
+        published = self.case.path("results_v2", task["task_id"])
+        mismatched = self.candidate("validate", task["task_id"], {**data, "validation_errors": ["still drafting"]})
+        report = result_cli.cleanup_protocol_files(self.registry, WORKSPACE_ID, "validate", task["task_id"])
+        self.assertTrue(mismatched.is_file())
+        self.assertEqual(report["skipped"][0]["reason"], "hash_mismatch")
+        self.assertTrue(published.is_file())
+        stranger = self.root / ".bridge" / "results_v2" / ".00000000-0000-4000-8000-000000000099.result.tmp"
+        stranger.write_bytes(published.read_bytes())
+        result_cli.cleanup_protocol_files(self.registry, WORKSPACE_ID, "validate", task["task_id"])
+        self.assertTrue(stranger.is_file())
+
     def test_safe_staging_requires_explicit_confirmation_and_derives_path(self):
         task, data, path = self.ready_validation()
         path.unlink()
-        source = self.base / "candidate 中文.json"
-        self.write_json(source, data)
+        source = self.candidate("validate", task["task_id"], data)
         before = self.files()
         report = result_cli.stage_candidate(self.registry, WORKSPACE_ID, "validate", task["task_id"], source)
         self.assertFalse(report["staged_written"])
@@ -207,3 +303,23 @@ class ResultPublicationTest(DeploymentCase):
         self.assertEqual(result["error"], "execution_failed")
         self.assertEqual(result["result_diagnosis"]["category"], "code_execution_failure")
         self.assertIsNone(result["test_passed"])
+
+
+class NativeAcceptanceCandidateTest(unittest.TestCase):
+    def test_acceptance_script_uses_the_private_candidate_and_restores_the_stage(self):
+        script = Path(__file__).resolve().parents[1] / "scripts" / "native_deployment_acceptance.py"
+        text = script.read_text(encoding="utf-8")
+        self.assertIn("acceptance_candidate(phase, identity)", text)
+        self.assertIn('acceptance_candidate("execute", execution["execution_id"])', text)
+        self.assertIn("stage.write_bytes(raw)", text)
+        self.assertNotIn("candidate.json", text)
+        spec = importlib.util.spec_from_file_location("native_deployment_acceptance_contract", script)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        identity = "11111111-1111-4111-8111-111111111111"
+        path = module.acceptance_candidate("validate", identity)
+        self.assertEqual(path, result_cli.private_candidate_path("validate", identity))
+        self.assertEqual(path.name, "." + identity + ".result.tmp")
+        self.assertEqual(path.parent.name, "validate")
+        self.assertEqual(path.parent.parent.name, "grokbot-mcp-candidates")
+        self.assertTrue(path.parent.is_dir())
