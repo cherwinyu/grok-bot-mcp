@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Add `--from-env <URL_VAR> <KEY_VAR>` to `init_credentials` so webhook credentials can be stored from environment variables without printing them; missing or empty variables print `credential_env_missing` and exit 1.
+- When `prepare_execution` returns `validation_missing`, include a `hint` telling the caller to run `grok_submit_validation` first.
+
+
 ## 0.1.4b1 (experimental Beta)
 
 - First standalone Public Beta candidate in a clean repository without the private development history.

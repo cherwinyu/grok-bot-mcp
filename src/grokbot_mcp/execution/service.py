@@ -178,7 +178,10 @@ def prepare_execution(workspace: Workspace, task_id: str, sibling_roots: list[Pa
         return _base(manifest_task_id=task_id, error="workspace_writes_disabled")
     report = assess(workspace, task_id)
     if report["ok"] is not True:
-        return _base(manifest_task_id=task_id, manifest_sha256=report.get("manifest_sha256"), approval_state="denied", error=report["error"])
+        payload = _base(manifest_task_id=task_id, manifest_sha256=report.get("manifest_sha256"), approval_state="denied", error=report["error"])
+        if report["error"] == "validation_missing":
+            payload["hint"] = "run grok_submit_validation for this manifest first, then call grok_prepare_execution again"
+        return payload
     store = _ledger(workspace)
     with store.locked():
         binding = routine_readiness(workspace, "execute")
@@ -186,7 +189,10 @@ def prepare_execution(workspace: Workspace, task_id: str, sibling_roots: list[Pa
             return _base(manifest_task_id=task_id, approval_state="denied", error=str(binding["binding_error"]))
         report = assess(workspace, task_id)
         if report["ok"] is not True:
-            return _base(manifest_task_id=task_id, approval_state="denied", error=report["error"])
+            payload = _base(manifest_task_id=task_id, approval_state="denied", error=report["error"])
+            if report["error"] == "validation_missing":
+                payload["hint"] = "run grok_submit_validation for this manifest first, then call grok_prepare_execution again"
+            return payload
         _recover(store)
         records = store.list_records()
         for record in records:
