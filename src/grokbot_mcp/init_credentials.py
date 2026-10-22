@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import getpass
+import os
 import sys
 import warnings
 
@@ -14,7 +15,30 @@ from grokbot_mcp.credentials.windows import CredentialError, store_credential
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Store one webhook credential in Windows Credential Manager.")
     parser.add_argument("--target", required=True, help="Credential target name, for example grokbot-mcp/example-workspace/validate")
+    parser.add_argument(
+        "--from-env",
+        nargs=2,
+        metavar=("URL_VAR", "KEY_VAR"),
+        help="Read webhook URL and key from named environment variables, then remove those variables",
+    )
     args = parser.parse_args(argv)
+    if args.from_env is not None:
+        url_var, key_var = args.from_env
+        url = os.environ.pop(url_var, None)
+        key = os.environ.pop(key_var, None)
+        if not url or not key:
+            print("credential_env_missing")
+            return 1
+        try:
+            store_credential(args.target, pack_blob(url, key))
+        except (BlobError, CredentialError):
+            print("credential_rejected")
+            return 1
+        finally:
+            url = ""
+            key = ""
+        print("credential_stored")
+        return 0
     try:
         with warnings.catch_warnings():
             warnings.simplefilter("error", getpass.GetPassWarning)
