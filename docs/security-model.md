@@ -25,6 +25,12 @@
 - No unattended handling of interactive approval dialogs. If a local tool asks for approval and nobody is present, stop.
 - `advisory_precheck` is not a sandbox.
 
+## Strict and advisory Git gates
+
+`strict` remains the default and preserves the existing HEAD, dirty-worktree, untracked-file and post-run scope refusals. A workspace may explicitly select `advisory`: the claim freezes the then-current HEAD and existing tracked/untracked change list, while later out-of-scope changes are reported instead of failing solely for scope.
+
+Advisory checks every registered protected/forbidden path against the current HEAD at admission and claim, then compares the recorded hashes after claim. `.git` is not path-compared, and the bridge's own untracked `.bridge` runtime directory remains excluded. Git command failures, manifest allow-list validation, claim-once, identity, frozen-evidence and no-resend rules remain fail-closed. Advisory cannot attribute concurrent writes to an agent, cannot detect out-of-scope reads, and is not an OS sandbox. The operator must review Git history and diffs.
+
 ## Credential boundaries
 
 The validate target is never used as the execute key, and the reverse is also refused. The repository contains no credential value. Setup prompts do not echo the key and do not write it to a project file.

@@ -34,10 +34,20 @@ def workspace_git_rejection(root: Path, runner=subprocess.run) -> str | None:
     return None
 
 
-def git_snapshot(root: Path, allowed: tuple[str, ...], expected_head: str, runner=subprocess.run) -> dict[str, object]:
+def git_snapshot(root: Path, allowed: tuple[str, ...], expected_head: str,
+                 forbidden: tuple[str, ...] = (), runner=subprocess.run) -> dict[str, object]:
     head = _run(root, ["rev-parse", "HEAD"], runner)
     status = _run(root, ["status", "--porcelain"], runner)
     diff = _run(root, ["diff", "--name-only", "HEAD"], runner)
+    protected = tuple(
+        name.rstrip("/") for name in forbidden
+        if name.rstrip("/") not in {".git", ".bridge"}
+    )
+    protected_status = (
+        _run(root, ["status", "--porcelain=v1", "--ignored", "--untracked-files=all",
+                    "--", *protected], runner)
+        if protected else None
+    )
     empty = {
         "git_head": "unconfirmed",
         "head_text": "",
@@ -46,7 +56,10 @@ def git_snapshot(root: Path, allowed: tuple[str, ...], expected_head: str, runne
         "unconfirmed_changes": ["git_status_failed"],
         "diff_files": [],
     }
-    if head.returncode != 0 or status.returncode != 0 or diff.returncode != 0:
+    if (head.returncode != 0 or status.returncode != 0 or diff.returncode != 0
+            or protected_status is not None and protected_status.returncode != 0):
+        if protected:
+            empty["protected_or_forbidden_changes"] = []
         return empty
     known: list[str] = []
     unexpected: list[str] = []
@@ -70,7 +83,7 @@ def git_snapshot(root: Path, allowed: tuple[str, ...], expected_head: str, runne
             continue
         unconfirmed.append(name)
     head_text = (head.stdout or "").strip()
-    return {
+    result = {
         "git_head": "match" if head_text == expected_head else "mismatch",
         "head_text": head_text,
         "known_legal_changes": known,
@@ -78,11 +91,28 @@ def git_snapshot(root: Path, allowed: tuple[str, ...], expected_head: str, runne
         "unconfirmed_changes": unconfirmed,
         "diff_files": diff_files,
     }
+    if protected_status is not None:
+        protected_changes: list[str] = []
+        for line in (protected_status.stdout or "").splitlines():
+            if len(line) < 4:
+                continue
+            body = line[3:].strip().replace("\\", "/")
+            names = [part.strip() for part in body.split(" -> ")] if " -> " in body else [body]
+            for name in names:
+                name = name.rstrip("/")
+                if name and name not in protected_changes:
+                    protected_changes.append(name)
+        result["protected_or_forbidden_changes"] = sorted(protected_changes)
+    return result
 
 
-def git_error(git: dict[str, object]) -> str | None:
+def git_error(git: dict[str, object], git_gate: str = "strict") -> str | None:
     if git.get("git_head") == "unconfirmed":
         return "git_status_failed"
+    if git.get("protected_or_forbidden_changes"):
+        return "protected_or_forbidden_changed"
+    if git_gate == "advisory":
+        return None
     if git.get("git_head") != "match":
         return "git_head_mismatch"
     if git.get("unexpected_changes"):

@@ -44,6 +44,7 @@ class Workspace:
     expected_machine: str
     policy_revision: int = 1
     execution_profile: ExecutionProfile | None = None
+    git_gate: str = "strict"
 
     def command(self, command_id: str) -> TestCommand | None:
         for item in self.test_commands:
@@ -127,6 +128,9 @@ def _workspace(item: object) -> Workspace:
     expected_head = item.get("expected_head")
     if not isinstance(expected_head, str) or not _SHA.fullmatch(expected_head):
         raise RegistryError("registry_invalid")
+    git_gate = item.get("git_gate", "strict")
+    if not isinstance(git_gate, str) or git_gate not in {"strict", "advisory"}:
+        raise RegistryError("registry_invalid")
     allowed = _strings(item.get("allowed_files"))
     forbidden = tuple(_strings(item.get("forbidden_files")))
     protected = item.get("protected_file")
@@ -170,6 +174,7 @@ def _workspace(item: object) -> Workspace:
         expected_machine=machine,
         policy_revision=revision,
         execution_profile=profile,
+        git_gate=git_gate,
     )
 
 
@@ -226,5 +231,7 @@ def policy_fingerprint(workspace: Workspace) -> str:
     }
     if workspace.execution_profile is not None:
         policy["execution_profile"] = asdict(workspace.execution_profile)
+    if workspace.git_gate != "strict":
+        policy["git_gate"] = workspace.git_gate
     raw = json.dumps(policy, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("utf-8")
     return hashlib.sha256(raw).hexdigest()

@@ -33,6 +33,12 @@ Expected result includes `"mode": "OFFLINE_SIMULATION"` and `"real_webhooks_sent
 
 Seven stable MCP stdio tools are retained. There is no arbitrary shell/root tool exposed over MCP.
 
+## Optional advisory Git gate
+
+Workspace registrations may set `"git_gate": "advisory"`; omission remains byte-compatible with the existing strict mode. Advisory mode records the claim-time HEAD and pre-existing tracked/untracked changes, then reports newly observed or agent-reported paths outside `allowed_files` as `out_of_scope_changes` without failing solely for those paths. At admission and claim, registered protected/forbidden paths are checked against the current HEAD; after claim, their recorded hashes are compared again. `.git` is not path-compared and the bridge's own untracked `.bridge` runtime directory remains excluded. Git command failures, manifest scope, claim-once, identity, frozen evidence and no-resend checks remain fail-closed.
+
+This trade-off supports multiple agents sharing one checkout, but the bridge cannot determine which concurrent writer owns a change. Operators must review Git history and diffs themselves. Reads outside the declared scope are not detectable, and advisory mode is not an OS sandbox.
+
 ## Where execution actually happens
 
 ~~~text
