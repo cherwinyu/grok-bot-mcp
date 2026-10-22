@@ -14,6 +14,8 @@ Validation identity is `task_id`, action `validate_manifest`. Terminal results r
 
 Execution identity is `execution_id` **and** `manifest_task_id`, action `execute_manifest`. Terminal results require boolean `code_modified`, normalized unique repo-relative `changed_files`, and `tests` with the registered `command_id`. Optional `cursor_cloud_agent_used`, when supplied, must be boolean. Existing claim/baseline/scope verification still runs independently; a correctly typed string does not satisfy claim evidence.
 
+For a workspace explicitly registered with `git_gate: advisory`, the verified execution summary also contains `out_of_scope_changes`, a normalized list formed from agent-reported changes and changes newly observed relative to the claim baseline that are outside `allowed_files`. A non-empty list does not by itself make the execution fail, and it remains present in a failed verified summary once calculated. Protected/forbidden paths are checked against the current HEAD at admission and claim, then checked by recorded hash after claim; `.git` is not path-compared and the bridge's own untracked `.bridge` runtime directory is excluded. This field does not attribute concurrent writes to a particular agent.
+
 公共身份不从文件名或自然语言猜测；校验阶段使用 `task_id`，执行阶段必须同时有 `execution_id`、`manifest_task_id`。结果位置由登记和任务确定，调用者不能传任意写入目标。共享类型校验不会替代原 claim 字节哈希、冻结成功 proof、基线和文件范围检查。
 
 ## Counts are measurements, not booleans / 计数必须来自测量

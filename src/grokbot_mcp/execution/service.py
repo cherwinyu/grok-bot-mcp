@@ -17,7 +17,7 @@ from grokbot_mcp.execution.evidence import verify_evidence
 from grokbot_mcp.validation.evidence import verify_validation_decision
 from grokbot_mcp.observation import deadline
 from grokbot_mcp.result_contract import diagnosis, result_identity, validate_result, ContractError
-from grokbot_mcp.security.baseline import capture_snapshot, execution_delta, load_snapshot, same_snapshot, write_snapshot
+from grokbot_mcp.security.baseline import capture_snapshot, execution_delta, load_snapshot, replace_snapshot, same_snapshot, write_snapshot
 from grokbot_mcp.security.gitcheck import git_error, git_snapshot, workspace_git_rejection
 from grokbot_mcp.security.paths import is_reparse_point, is_uuid, normalize_repo_path
 from grokbot_mcp.security.targets import TargetRejected, resolve_exact_files
@@ -68,6 +68,12 @@ def _base(**fields: object) -> dict[str, object]:
     return payload
 
 
+def _protected_fields(report: dict[str, object]) -> dict[str, object]:
+    git = report.get("git")
+    changes = git.get("protected_or_forbidden_changes") if isinstance(git, dict) else None
+    return {"protected_or_forbidden_changes": changes} if changes else {}
+
+
 def _ledger(workspace: Workspace) -> JsonLedger:
     return JsonLedger(workspace.root / ".bridge" / "executions")
 
@@ -116,7 +122,10 @@ def assess(workspace: Workspace, task_id: str, *, check_workspace: bool = True) 
     allowed = document.get("allowed_files")
     command = workspace.command(str(document.get("test_command_id")))
     if (document.get("task_id") != task_id or document.get("manifest_task_id") != task_id
-            or document.get("baseline_commit") != workspace.expected_head
+            or (workspace.git_gate == "strict" and document.get("baseline_commit") != workspace.expected_head)
+            or (workspace.git_gate == "advisory"
+                and (not isinstance(document.get("baseline_commit"), str)
+                     or len(document["baseline_commit"]) != 40))
             or not isinstance(allowed, list) or not all(isinstance(x, str) for x in allowed)
             or any(x not in workspace.allowed_files for x in allowed)
             or len(set(allowed)) != len(allowed) or command is None
@@ -156,8 +165,11 @@ def assess(workspace: Workspace, task_id: str, *, check_workspace: bool = True) 
         validation_verified_at = verify_validation_decision(workspace, task_id, digest, proof_sha, proof)
     except ValueError as exc:
         return {"ok": False, "error": str(exc), "manifest_sha256": digest, "document": document}
-    git = git_snapshot(workspace.root, workspace.allowed_files, workspace.expected_head)
-    problem = git_error(git)
+    git = git_snapshot(
+        workspace.root, workspace.allowed_files, workspace.expected_head,
+        workspace.forbidden_files if workspace.git_gate == "advisory" else (),
+    )
+    problem = git_error(git, workspace.git_gate)
     if problem and (check_workspace or problem in {"git_status_failed", "git_head_mismatch"}):
         return {"ok": False, "error": problem, "manifest_sha256": digest, "document": document, "git": git}
     return {
@@ -178,7 +190,11 @@ def prepare_execution(workspace: Workspace, task_id: str, sibling_roots: list[Pa
         return _base(manifest_task_id=task_id, error="workspace_writes_disabled")
     report = assess(workspace, task_id)
     if report["ok"] is not True:
-        return _base(manifest_task_id=task_id, manifest_sha256=report.get("manifest_sha256"), approval_state="denied", error=report["error"])
+        return _base(
+            manifest_task_id=task_id, manifest_sha256=report.get("manifest_sha256"),
+            approval_state="denied", error=report["error"],
+            **_protected_fields(report),
+        )
     store = _ledger(workspace)
     with store.locked():
         binding = routine_readiness(workspace, "execute")
@@ -186,7 +202,10 @@ def prepare_execution(workspace: Workspace, task_id: str, sibling_roots: list[Pa
             return _base(manifest_task_id=task_id, approval_state="denied", error=str(binding["binding_error"]))
         report = assess(workspace, task_id)
         if report["ok"] is not True:
-            return _base(manifest_task_id=task_id, approval_state="denied", error=report["error"])
+            return _base(
+                manifest_task_id=task_id, approval_state="denied", error=report["error"],
+                **_protected_fields(report),
+            )
         _recover(store)
         records = store.list_records()
         for record in records:
@@ -277,7 +296,12 @@ def submit_execution(
         report = assess(workspace, task_id)
         if report["ok"] is not True or report.get("manifest_sha256") != record.get("manifest_sha256") or report.get("validation_sha256") != record.get("validation_result_sha256"):
             store.update(execution_id, approval_state="revoked", error=report.get("error") or "hash_mismatch")
-            return _from_record(store.read(execution_id), error=str(report.get("error") or "hash_mismatch"), execute_enabled=switch_enabled)
+            return _from_record(
+                store.read(execution_id),
+                error=str(report.get("error") or "hash_mismatch"),
+                execute_enabled=switch_enabled,
+                **_protected_fields(report),
+            )
         if status_fn() != "present":
             return _from_record(record, error="credentials_" + status_fn(), execute_enabled=switch_enabled)
         try:
@@ -351,9 +375,24 @@ def claim_execution(workspace: Workspace, execution_id: str, sibling_roots: list
         try:
             verify_evidence(workspace, record, report, require_claim=False, unchanged=True)
         except (OSError, ValueError) as exc:
-            return {"ok": False, "error": str(exc)}
+            return {"ok": False, "error": str(exc), **_protected_fields(report)}
         document = report["document"]
         assert isinstance(document, dict)
+        if workspace.git_gate == "advisory":
+            watched = list(workspace.allowed_files) + list(workspace.forbidden_files)
+            try:
+                snapshot = capture_snapshot(workspace.root, watched)
+            except ValueError as exc:
+                return {"ok": False, "error": str(exc)}
+            if snapshot.get("git_head_text") != document.get("baseline_commit"):
+                return {"ok": False, "error": "git_head_mismatch"}
+            try:
+                baseline_sha = replace_snapshot(
+                    _bridge(workspace) / "execution_baselines", execution_id, snapshot,
+                )
+            except ValueError as exc:
+                return {"ok": False, "error": str(exc)}
+            record = store.update(execution_id, baseline_sha256=baseline_sha)
         try:
             allowed = resolve_exact_files(workspace.root, list(document.get("allowed_files") or []), workspace.forbidden_files)
         except TargetRejected as exc:
@@ -375,6 +414,13 @@ def claim_execution(workspace: Workspace, execution_id: str, sibling_roots: list
             "enforcement": "advisory_precheck",
             "claimed_at": utc_now(),
         }
+        if workspace.git_gate == "advisory":
+            payload.update(
+                git_gate="advisory",
+                baseline_commit=snapshot["git_head_text"],
+                existing_changes=sorted(set(snapshot.get("diff_files") or [])
+                                        | set(snapshot.get("untracked") or [])),
+            )
         import json
 
         raw = json.dumps(payload, ensure_ascii=True, indent=2, sort_keys=True).encode("utf-8")
@@ -402,6 +448,8 @@ def claim_execution(workspace: Workspace, execution_id: str, sibling_roots: list
             "allowed_files": allowed,
             "forbidden_files": list(workspace.forbidden_files),
             "baseline_commit": document.get("baseline_commit"),
+            **({"git_gate": "advisory", "existing_changes": payload["existing_changes"]}
+               if workspace.git_gate == "advisory" else {}),
             "test_command_id": document.get("test_command_id"),
             "acceptance_criteria": document.get("acceptance_criteria"),
             "target_check": "present",
@@ -448,10 +496,20 @@ def _interpret(
     result["code_modified"] = bool(delta)
     document = report.get("document")
     allowed = set(document.get("allowed_files") or []) if isinstance(document, dict) else set()
-    reported = _reported_files(parsed.get("changed_files"), workspace)
-    if reported is None or any(_outside(name, allowed, workspace.forbidden_files) for name in delta):
+    reported = _reported_files(parsed.get("changed_files"), workspace, advisory=workspace.git_gate == "advisory")
+    forbidden = set(workspace.forbidden_files)
+    protected_change = any(_blocked(name, forbidden) for name in delta)
+    protected_report = reported is not None and any(_blocked(name, forbidden) for name in reported)
+    if reported is None or protected_change or protected_report:
         return _fail(store, execution_id, result, "scope_violation", result_sha256)
-    if set(reported) != set(delta):
+    out_of_scope = sorted({name for name in set(reported) | set(delta) if name not in allowed})
+    if workspace.git_gate == "advisory":
+        result["out_of_scope_changes"] = out_of_scope
+        if {name for name in reported if name in allowed} != {name for name in delta if name in allowed}:
+            return _fail(store, execution_id, result, "result_inconsistent", result_sha256)
+    elif any(_outside(name, allowed, workspace.forbidden_files) for name in delta):
+        return _fail(store, execution_id, result, "scope_violation", result_sha256)
+    elif set(reported) != set(delta):
         return _fail(store, execution_id, result, "result_inconsistent", result_sha256)
     issue = result["result_diagnosis"]
     if issue["category"] in {"format_error", "identity_error"}:
@@ -484,6 +542,8 @@ def _interpret(
                  result_sha256=result_sha256, verified_at=verified_at, historical_status="succeeded",
                  terminal=True, verified_snapshot=current, late_result=deadline(record)["deadline_exceeded"],
                  verified_summary={"changed_files": delta, "code_modified": bool(delta),
+                                   **({"out_of_scope_changes": out_of_scope}
+                                      if workspace.git_gate == "advisory" else {}),
                                    "test_passed": passed, "test_failed": failed, "godot_exit_code": exit_code,
                                    "result_diagnosis": result.get("result_diagnosis")})
     result.update(verified_at=verified_at, historical_status="succeeded", verification_scope="current",
@@ -496,7 +556,7 @@ def _interpret(
     return result
 
 
-def _reported_files(value: object, workspace: Workspace) -> list[str] | None:
+def _reported_files(value: object, workspace: Workspace, *, advisory: bool = False) -> list[str] | None:
     if not isinstance(value, list):
         return None
     names: list[str] = []
@@ -507,7 +567,8 @@ def _reported_files(value: object, workspace: Workspace) -> list[str] | None:
             text = normalize_repo_path(item)
         except Exception:
             return None
-        if text not in workspace.allowed_files or _outside(text, set(workspace.allowed_files), workspace.forbidden_files):
+        if not advisory and (text not in workspace.allowed_files
+                             or _outside(text, set(workspace.allowed_files), workspace.forbidden_files)):
             return None
         names.append(text)
     return names
@@ -519,13 +580,20 @@ def _outside(name: str, allowed: set[str], forbidden: tuple[str, ...]) -> bool:
     return any(name == item or name.startswith(item + "/") for item in forbidden)
 
 
+def _blocked(name: str, forbidden: set[str]) -> bool:
+    return any(name == item or name.startswith(item + "/") for item in forbidden)
+
+
 def _fail(store: JsonLedger, execution_id: str, result: dict[str, object], code: str, result_sha256: str) -> dict[str, object]:
     state = "failed" if code == "test_failed" else code
     verified_at = utc_now()
+    summary = {"result_diagnosis": result.get("result_diagnosis")}
+    if isinstance(result.get("out_of_scope_changes"), list):
+        summary["out_of_scope_changes"] = result["out_of_scope_changes"]
     store.update(execution_id, execution_state=state, qa_state="rejected", error=code,
                  result_sha256=result_sha256, verified_at=verified_at, historical_status=state, terminal=True,
                  late_result=deadline(store.read(execution_id))["deadline_exceeded"],
-                 verified_summary={"result_diagnosis": result.get("result_diagnosis")})
+                 verified_summary=summary)
     result.update(verified_at=verified_at, historical_status=state, verification_scope="current",
                   current_integrity=False, integrity_error=code)
     result["execution_state"] = state

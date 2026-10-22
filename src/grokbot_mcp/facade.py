@@ -83,8 +83,7 @@ def list_workspaces() -> dict[str, object]:
         }
     items = []
     for workspace in registry.values():
-        items.append(
-            {
+        item = {
                 "workspace_id": workspace.workspace_id,
                 "expected_head": workspace.expected_head,
                 "allowed_files": list(workspace.allowed_files),
@@ -95,25 +94,31 @@ def list_workspaces() -> dict[str, object]:
                     "execute": workspace.execute_credential_target,
                 },
             }
-        )
-    return {
+        if workspace.git_gate == "advisory":
+            item["git_gate"] = "advisory"
+        items.append(item)
+    result = {
         "ok": True,
         "runtime_identity": runtime_identity(),
         "workspaces": items,
         "webhook_sent": False,
         "execution_enabled": execution_switch_enabled(),
     }
+    return result
 
 
 def preflight(workspace_id: str) -> dict[str, object]:
     workspace, error, _siblings = _workspace(workspace_id)
     if error is not None or workspace is None:
         return error or _closed("unknown_workspace", workspace_id)
-    git = git_snapshot(workspace.root, workspace.allowed_files, workspace.expected_head)
+    git = git_snapshot(
+        workspace.root, workspace.allowed_files, workspace.expected_head,
+        workspace.forbidden_files if workspace.git_gate == "advisory" else (),
+    )
     validate_status = status_for(workspace.validate_credential_target, (workspace.execute_credential_target,))
     execute_status = status_for(workspace.execute_credential_target, (workspace.validate_credential_target,))
     enabled = execution_switch_enabled()
-    local_error = git_error(git)
+    local_error = git_error(git, workspace.git_gate)
     try:
         resolve_exact_files(workspace.root, list(workspace.allowed_files), workspace.forbidden_files)
     except TargetRejected as exc:
@@ -138,7 +143,7 @@ def preflight(workspace_id: str) -> dict[str, object]:
                             "submit_permitted": not reasons, "blocking_reasons": reasons}
     confirmed = all(item["binding_confirmed"] for item in bindings.values())
     ready = all(item["submit_permitted"] for item in per_phase.values())
-    return {
+    result = {
         "workspace_id": workspace.workspace_id,
         "runtime_identity": runtime_identity(workspace.workspace_id),
         "execution_environment": environment_report(workspace),
@@ -147,6 +152,8 @@ def preflight(workspace_id: str) -> dict[str, object]:
         "known_legal_changes": git.get("known_legal_changes"),
         "unexpected_changes": git.get("unexpected_changes"),
         "unconfirmed_changes": git.get("unconfirmed_changes"),
+        **({"protected_or_forbidden_changes": git.get("protected_or_forbidden_changes")}
+           if workspace.git_gate == "advisory" else {}),
         "credentials": execute_status,
         "validate_credentials": validate_status,
         "execute_credentials": execute_status,
@@ -166,6 +173,9 @@ def preflight(workspace_id: str) -> dict[str, object]:
                    for phase, entry in per_phase.items()},
         "blocking_reasons": sorted({reason for item in per_phase.values() for reason in item["blocking_reasons"]}),
     }
+    if workspace.git_gate == "advisory":
+        result["git_gate"] = "advisory"
+    return result
 
 
 def prepare_task(
@@ -183,9 +193,16 @@ def prepare_task(
         return error or _closed("unknown_workspace", workspace_id)
     if not workspace.writes_enabled:
         return _closed("workspace_writes_disabled", workspace_id)
-    problem = git_error(git_snapshot(workspace.root, workspace.allowed_files, workspace.expected_head))
+    git = git_snapshot(
+        workspace.root, workspace.allowed_files, workspace.expected_head,
+        workspace.forbidden_files if workspace.git_gate == "advisory" else (),
+    )
+    problem = git_error(git, workspace.git_gate)
     if problem:
-        return _closed(problem, workspace_id)
+        result = _closed(problem, workspace_id)
+        if git.get("protected_or_forbidden_changes"):
+            result["protected_or_forbidden_changes"] = git["protected_or_forbidden_changes"]
+        return result
     try:
         result = prepare_manifest(
             workspace,
@@ -196,6 +213,7 @@ def prepare_task(
             test_command_id=test_command_id,
             execution_timeout=execution_timeout,
             baseline_commit=baseline_commit,
+            effective_baseline=str(git.get("head_text") or "") if workspace.git_gate == "advisory" else None,
         )
     except ManifestError as exc:
         return _closed(exc.code, workspace_id)

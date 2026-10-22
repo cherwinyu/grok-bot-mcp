@@ -51,8 +51,13 @@ def prepare_manifest(
     test_command_id: str,
     execution_timeout: int | None,
     baseline_commit: str | None,
+    effective_baseline: str | None = None,
 ) -> dict[str, object]:
-    if baseline_commit not in (None, "", workspace.expected_head):
+    selected_baseline = effective_baseline or workspace.expected_head
+    accepted_inputs = (None, "", workspace.expected_head)
+    if workspace.git_gate == "advisory":
+        accepted_inputs += (selected_baseline,)
+    if baseline_commit not in accepted_inputs:
         raise ManifestError("baseline_mismatch")
     if task_type not in {"code_change", "read_only"}:
         raise ManifestError("invalid_task_type")
@@ -71,7 +76,7 @@ def prepare_manifest(
     document: dict[str, object] = {
         "acceptance_criteria": criteria,
         "allowed_files": files,
-        "baseline_commit": workspace.expected_head,
+        "baseline_commit": selected_baseline,
         "constraint_version": CONSTRAINT_VERSION,
         "created_at": utc_now(),
         "execution_timeout": timeout,

@@ -28,7 +28,9 @@ def verify_evidence(workspace: Workspace, record: dict, assessment: dict,
     baseline = load_snapshot(workspace.root / ".bridge/execution_baselines",
                              str(record["execution_id"]), record.get("baseline_sha256"))
     document = assessment["document"]
-    if baseline.get("git_head_text") != workspace.expected_head or document.get("baseline_commit") != workspace.expected_head:
+    expected_baseline = (workspace.expected_head if workspace.git_gate == "strict"
+                         else document.get("baseline_commit"))
+    if baseline.get("git_head_text") != expected_baseline or document.get("baseline_commit") != expected_baseline:
         raise ValueError("git_head_mismatch")
     if require_claim:
         if record.get("execution_claim_state") != "claimed":
@@ -53,11 +55,18 @@ def verify_evidence(workspace: Workspace, record: dict, assessment: dict,
             "allowed_files": document["allowed_files"], "claimed_at": record["claimed_at"],
             "target_check": "present", "enforcement": "advisory_precheck",
         }
+        if workspace.git_gate == "advisory":
+            expected.update(
+                git_gate="advisory",
+                baseline_commit=baseline.get("git_head_text"),
+                existing_changes=sorted(set(baseline.get("diff_files") or [])
+                                        | set(baseline.get("untracked") or [])),
+            )
         if any(claim.get(key) != value for key, value in expected.items()):
             raise ValueError("claim_identity_mismatch")
     current = capture_snapshot(workspace.root, list(workspace.allowed_files) + list(workspace.forbidden_files))
     if current.get("git_head_text") != baseline.get("git_head_text"):
         raise ValueError("git_head_mismatch")
-    if unchanged and not same_snapshot(baseline, current):
+    if unchanged and workspace.git_gate == "strict" and not same_snapshot(baseline, current):
         raise ValueError("baseline_stale")
     return baseline, current

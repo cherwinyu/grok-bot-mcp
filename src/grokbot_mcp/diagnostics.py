@@ -45,7 +45,7 @@ _add("target_file_missing target_path_rejected target_case_mismatch target_not_f
      "Compare spelling and case against the registered files. Restore a missing protected file from your reviewed source; do not expand scope to a similar filename.")
 _add("git_head_mismatch baseline_stale", "The current Git baseline differs from the registered or frozen baseline. / 当前基线与登记或冻结基线不一致。",
      "Inspect git status and git log locally and review the frozen baseline. Do not auto-advance HEAD or delete the authorization.", blocks="prepare submit claim")
-_add("unexpected_changes unconfirmed_changes scope_violation workspace_changed_since_verification", "The workspace has changes that require review. / 工作区有待审查或越界改动。",
+_add("unexpected_changes unconfirmed_changes protected_or_forbidden_changed scope_violation workspace_changed_since_verification", "The workspace has changes that require review. / 工作区有待审查或越界改动。",
      "Inspect git status and git diff in the workspace. Review every difference; do not reset files or widen the allow-list to make the check pass.", blocks="prepare submit claim acceptance")
 _add("credentials_missing credentials_unreadable credential_unreadable", "One phase's credential is absent or unreadable. / 对应阶段凭据缺失或不可读。",
      "Resume setup in an interactive PowerShell. Enter that phase's URL/key only through hidden input; use --replace-credentials only for an intentional replacement.")
@@ -273,12 +273,17 @@ def _collect(registry: Path, workspace_id: str, *, purpose="setup", export=False
         safe_path(workspace.root / ".bridge")
         safe_path(registry.parent / "execution_switch.json")
         problem = None
+        git_report = None
         if not workspace.root.is_dir():
             problem = "workspace_path_invalid"
         elif any(c in environment["codes"] for c in ("git_missing", "git_unavailable")):
             problem = "git_unavailable"
         else:
-            problem = workspace_git_rejection(workspace.root) or git_error(git_snapshot(workspace.root, workspace.allowed_files, workspace.expected_head))
+            git_report = git_snapshot(
+                workspace.root, workspace.allowed_files, workspace.expected_head,
+                workspace.forbidden_files if workspace.git_gate == "advisory" else (),
+            )
+            problem = workspace_git_rejection(workspace.root) or git_error(git_report, workspace.git_gate)
         try:
             resolve_exact_files(workspace.root, list(workspace.allowed_files), workspace.forbidden_files)
             resolve_exact_files(workspace.root, [workspace.protected_file], (".git", ".bridge"))
@@ -287,6 +292,12 @@ def _collect(registry: Path, workspace_id: str, *, purpose="setup", export=False
         if problem:
             add(problem)
         report["workspace_ready"] = problem is None
+        if workspace.git_gate == "advisory":
+            report["git_gate"] = "advisory"
+            report["protected_or_forbidden_changes"] = (
+                git_report.get("protected_or_forbidden_changes", [])
+                if isinstance(git_report, dict) else []
+            )
         switch = execution_switch_enabled(registry)
         if not switch:
             add("execution_switch_disabled")

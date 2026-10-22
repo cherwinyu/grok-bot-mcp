@@ -45,7 +45,10 @@ def task_scope(workspace, task_id: str, execution_id: str | None = None) -> dict
     document, sha = load_manifest(workspace.root, task_id)
     if (document.get("task_id") != task_id or document.get("manifest_task_id") != task_id
             or document.get("workspace_id") != workspace.workspace_id
-            or document.get("baseline_commit") != workspace.expected_head
+            or (workspace.git_gate == "strict" and document.get("baseline_commit") != workspace.expected_head)
+            or (workspace.git_gate == "advisory"
+                and (not isinstance(document.get("baseline_commit"), str)
+                     or len(document["baseline_commit"]) != 40))
             or document.get("forbidden_files") != list(workspace.forbidden_files)):
         raise LocalError("result_manifest_mismatch")
     allowed = document.get("allowed_files")
@@ -95,6 +98,8 @@ def preview(registry: Path, workspace_id: str, *, task_id: str | None = None,
         "remote_permission_verified": False, "send_authorized": False, "webhook_sent": False,
         "ledger_modified": False, "qa_accepted": False,
     }
+    if workspace.git_gate == "advisory":
+        report["git_gate"] = "advisory"
     if local_details:
         report["local_details"] = {"registry": str(registry), "root": str(workspace.root),
             "registered_allowed_files": list(workspace.allowed_files), "protected_files": list(workspace.forbidden_files)}

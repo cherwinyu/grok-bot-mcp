@@ -89,10 +89,17 @@ def submit_validation(
         return _result(task_id, error=exc.code)
     if document.get("workspace_id") != workspace.workspace_id or document.get("lifecycle") != "prepared":
         return _result(task_id, error="not_prepared", manifest_sha256=digest)
-    git = git_snapshot(workspace.root, workspace.allowed_files, workspace.expected_head)
-    problem = git_error(git)
+    git = git_snapshot(
+        workspace.root, workspace.allowed_files, workspace.expected_head,
+        workspace.forbidden_files if workspace.git_gate == "advisory" else (),
+    )
+    problem = git_error(git, workspace.git_gate)
     if problem:
-        return _result(task_id, error=problem, manifest_sha256=digest)
+        return _result(
+            task_id, error=problem, manifest_sha256=digest,
+            **({"protected_or_forbidden_changes": git["protected_or_forbidden_changes"]}
+               if git.get("protected_or_forbidden_changes") else {}),
+        )
     result_rel = ".bridge/results_v2/" + task_id + ".json"
     result_file = workspace.root / ".bridge" / "results_v2" / f"{task_id}.json"
     if result_file.exists():
@@ -177,7 +184,10 @@ def _interpret(store: JsonLedger, workspace: Workspace, record: dict[str, object
     except ManifestError as exc:
         result.update(status="hash_mismatch", error=exc.code)
         return result
-    if manifest_digest != record.get("manifest_sha256") or document.get("baseline_commit") != workspace.expected_head:
+    baseline_ok = (document.get("baseline_commit") == workspace.expected_head
+                   if getattr(workspace, "git_gate", "strict") == "strict"
+                   else isinstance(document.get("baseline_commit"), str) and len(document["baseline_commit"]) == 40)
+    if manifest_digest != record.get("manifest_sha256") or not baseline_ok:
         result.update(status="hash_mismatch", error="hash_mismatch")
         return result
     if result["result_diagnosis"]["category"] in {"format_error", "identity_error"}:

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Add opt-in `git_gate: advisory` for shared dirty workspaces, with claim-time baselines and non-fatal `out_of_scope_changes`; strict remains the byte-compatible default.
 - `grok_list_workspaces` returns `ok: false` and `workspaces: null` when the registry file is missing, instead of an empty workspace list.
 - Result candidates must be `%TEMP%\grokbot-mcp-candidates\<phase>\.<id>.result.tmp` for both validate and execute. `result_cli --source` rejects every other location.
 - A terminal publish removes that id's staged file and the matching temp candidate, and records the cleanup under `.bridge/protocol_cleanup/` without modifying the submission ledger or the published result. `result_cli --cleanup` repeats that limited deletion.

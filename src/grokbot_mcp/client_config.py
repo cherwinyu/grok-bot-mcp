@@ -132,7 +132,13 @@ def workspace_checks(registry: Path, workspace_id: str) -> tuple[object, list[st
     if not workspace.root.is_dir():
         raise LocalError("workspace_missing")
     codes = []
-    error = workspace_git_rejection(workspace.root) or git_error(git_snapshot(workspace.root, workspace.allowed_files, workspace.expected_head))
+    error = workspace_git_rejection(workspace.root) or git_error(
+        git_snapshot(
+            workspace.root, workspace.allowed_files, workspace.expected_head,
+            workspace.forbidden_files if workspace.git_gate == "advisory" else (),
+        ),
+        workspace.git_gate,
+    )
     if error:
         codes.append(error)
     try:
@@ -165,6 +171,8 @@ def inspect_config(path: Path, name: str, workspace_id: str, *, local_details: b
               "qa_accepted": False, "next_step": "Use an explicit standalone probe; then reload the actual client and compare its preflight runtime_identity. " + RECOVERY}
     if local_details:
         result["local_paths"] = {"client_config": str(path), "python": str(python), "registry": str(registry)}
+    if workspace.git_gate == "advisory":
+        result["git_gate"] = "advisory"
     return result
 
 
@@ -211,6 +219,8 @@ def switch_plan(path: Path, name: str, python: Path, registry: Path, workspace_i
             "old_launch": {"command_id": path_id("python", Path(old_entry["command"])) if type(old_entry.get("command")) is str else None,
                            "args_changed": old_entry.get("args") != entry["args"]},
             "next_step": "Review this plan. Re-run switch with --apply --confirm <plan_sha256>. A standalone probe does not reconnect the client."}
+    if workspace.git_gate == "advisory":
+        plan["git_gate"] = "advisory"
     if local_details:
         old_env = old_entry.get("env", {})
         plan["local_path_diff"] = {

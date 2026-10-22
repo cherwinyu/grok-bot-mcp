@@ -69,6 +69,8 @@ def _snapshot_binding(path: Path) -> dict | None:
 
 def _profile(workspace, *, local_details=False) -> dict:
     value = asdict(workspace)
+    if workspace.git_gate == "strict":
+        value.pop("git_gate")
     value["root_id"] = path_id("workspace-root", workspace.root)
     value.pop("root")
     if not local_details:
@@ -126,6 +128,8 @@ def plan(registry: Path, workspace_id: str, python: Path, *, target_registry: Pa
         codes.append("migration_execution_profile_change_forbidden")
     if current.writes_enabled != target.writes_enabled:
         codes.append("migration_write_permission_change_forbidden")
+    if current.git_gate != target.git_gate:
+        codes.append("migration_git_gate_change_forbidden")
     pending = unresolved_tasks(current)
     if pending:
         codes.append("binding_change_has_unresolved_tasks")

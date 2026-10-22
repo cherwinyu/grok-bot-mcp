@@ -147,6 +147,34 @@ def make_workspace(tmp: Path, *, writes: bool = True) -> Path:
     return root
 
 
+def make_advisory_workspace(
+    tmp: Path, *, writes: bool = True, extra_forbidden: tuple[str, ...] = (),
+) -> Path:
+    """Create the standard fictional workspace, then opt its registry into advisory."""
+    root = make_workspace(tmp, writes=writes)
+    registry_path = tmp / "registry.json"
+    registry = json.loads(registry_path.read_text(encoding="utf-8"))
+    item = registry["workspaces"][0]
+    item["git_gate"] = "advisory"
+    item["forbidden_files"].extend(extra_forbidden)
+    registry_path.write_text(json.dumps(registry), encoding="utf-8")
+    policy = {key: item[key] for key in (
+        "workspace_id", "expected_head", "allowed_files", "forbidden_files",
+        "protected_file", "test_commands", "expected_machine",
+        "validate_credential_target", "execute_credential_target", "git_gate",
+    )}
+    policy["policy_revision"] = 1
+    fingerprint = hashlib.sha256(json.dumps(
+        policy, sort_keys=True, separators=(",", ":"), ensure_ascii=True,
+    ).encode()).hexdigest()
+    for phase in ("validate", "execute"):
+        path = root / ".bridge" / (phase + "_routine_status.json")
+        document = json.loads(path.read_text(encoding="utf-8"))
+        document["binding"]["policy_fingerprint"] = fingerprint
+        path.write_text(json.dumps(document), encoding="utf-8")
+    return root
+
+
 def proof(task_id: str, digest: str, allowed: list[str]) -> dict[str, object]:
     return {
         "protocol_version": 1,

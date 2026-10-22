@@ -106,6 +106,26 @@ def write_snapshot(directory: Path, execution_id: str, snapshot: dict[str, objec
     return hashlib.sha256(raw).hexdigest()
 
 
+def replace_snapshot(directory: Path, execution_id: str, snapshot: dict[str, object]) -> str:
+    """Atomically replace the pre-claim advisory snapshot with claim-time evidence."""
+    if not is_uuid(execution_id):
+        raise ValueError("invalid_execution_id")
+    target = directory / f"{execution_id}.json"
+    if not target.is_file() or is_reparse_point(target):
+        raise ValueError("baseline_missing")
+    raw = json.dumps(snapshot, ensure_ascii=True, indent=2, sort_keys=True).encode("utf-8")
+    temporary = directory / f".{execution_id}.tmp"
+    try:
+        with temporary.open("wb") as handle:
+            handle.write(raw)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, target)
+    finally:
+        temporary.unlink(missing_ok=True)
+    return hashlib.sha256(raw).hexdigest()
+
+
 def load_snapshot(directory: Path, execution_id: str, expected_sha256: object) -> dict[str, object]:
     if not isinstance(expected_sha256, str) or len(expected_sha256) != 64:
         raise ValueError("baseline_missing")
