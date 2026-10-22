@@ -1,7 +1,10 @@
 from __future__ import annotations
 import copy
+import importlib.util
 import json
 import os
+import unittest
+from pathlib import Path
 from unittest.mock import patch
 from grokbot_mcp import facade, result_cli
 from grokbot_mcp.local_safety import LocalError, current_hash
@@ -300,3 +303,23 @@ class ResultPublicationTest(DeploymentCase):
         self.assertEqual(result["error"], "execution_failed")
         self.assertEqual(result["result_diagnosis"]["category"], "code_execution_failure")
         self.assertIsNone(result["test_passed"])
+
+
+class NativeAcceptanceCandidateTest(unittest.TestCase):
+    def test_acceptance_script_uses_the_private_candidate_and_restores_the_stage(self):
+        script = Path(__file__).resolve().parents[1] / "scripts" / "native_deployment_acceptance.py"
+        text = script.read_text(encoding="utf-8")
+        self.assertIn("acceptance_candidate(phase, identity)", text)
+        self.assertIn('acceptance_candidate("execute", execution["execution_id"])', text)
+        self.assertIn("stage.write_bytes(raw)", text)
+        self.assertNotIn("candidate.json", text)
+        spec = importlib.util.spec_from_file_location("native_deployment_acceptance_contract", script)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        identity = "11111111-1111-4111-8111-111111111111"
+        path = module.acceptance_candidate("validate", identity)
+        self.assertEqual(path, result_cli.private_candidate_path("validate", identity))
+        self.assertEqual(path.name, "." + identity + ".result.tmp")
+        self.assertEqual(path.parent.name, "validate")
+        self.assertEqual(path.parent.parent.name, "grokbot-mcp-candidates")
+        self.assertTrue(path.parent.is_dir())
