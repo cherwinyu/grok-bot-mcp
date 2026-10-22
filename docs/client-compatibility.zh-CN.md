@@ -31,6 +31,32 @@ env = { GROKBOT_MCP_REGISTRY = "C:\\Example Config\\registry.json" }
 
 片段采用 Python 3.12 tomllib 解析复核，特殊字符、反斜杠和中文路径均按 TOML 基础字符串规则转义。不能在片段中增加任意凭据或执行器环境字段。
 
+Cursor `mcp.json` 的形状（两条路径都要换成当前安装，不要沿用失效路径）：
+
+~~~json
+{
+  "mcpServers": {
+    "grokbot-mcp": {
+      "command": "C:\\Example Bridge\\Scripts\\python.exe",
+      "args": ["-I", "-X", "utf8", "-m", "grokbot_mcp.server"],
+      "env": {
+        "GROKBOT_MCP_REGISTRY": "C:\\Example Config\\registry.json"
+      }
+    }
+  }
+}
+~~~
+
+在同一 PowerShell 进程里检查路径。后开的后台 shell 不会继承上一条命令设置的环境变量。
+
+~~~powershell
+if (-not (Test-Path -LiteralPath $BridgePython)) { throw 'python_path_missing' }
+if (-not (Test-Path -LiteralPath $Registry)) { throw 'registry_path_missing' }
+& $BridgePython -I -X utf8 -c "import grokbot_mcp; print(grokbot_mcp.__version__)"
+~~~
+
+注册表文件不存在时，`grok_list_workspaces` 返回 `ok: false`、`error: registry_missing`、`workspaces: null`，而不是一份成功的空列表。写请求文件再调用 `result_cli` 的脚本，以及失败类型对照，见 [README](../README.zh-CN.md#host-setup)。
+
 ## 客户端各自操作
 
 | 客户端 | 配置 | 操作 | 验收状态 |

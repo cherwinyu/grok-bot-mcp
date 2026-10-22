@@ -31,6 +31,32 @@ env = { GROKBOT_MCP_REGISTRY = "C:\\Example Config\\registry.json" }
 
 The printed TOML is validated using Python 3.12 tomllib and contains only the reviewed command, ordered module arguments, and selected registry environment variable. Windows backslashes and Unicode paths are safely quoted.
 
+Example Cursor `mcp.json` shape (replace both paths; do not keep a path from an older checkout):
+
+~~~json
+{
+  "mcpServers": {
+    "grokbot-mcp": {
+      "command": "C:\\Example Bridge\\Scripts\\python.exe",
+      "args": ["-I", "-X", "utf8", "-m", "grokbot_mcp.server"],
+      "env": {
+        "GROKBOT_MCP_REGISTRY": "C:\\Example Config\\registry.json"
+      }
+    }
+  }
+}
+~~~
+
+Before reconnecting, check the paths in the same PowerShell process. A later background shell does not inherit variables set earlier.
+
+~~~powershell
+if (-not (Test-Path -LiteralPath $BridgePython)) { throw 'python_path_missing' }
+if (-not (Test-Path -LiteralPath $Registry)) { throw 'registry_path_missing' }
+& $BridgePython -I -X utf8 -c "import grokbot_mcp; print(grokbot_mcp.__version__)"
+~~~
+
+`grok_list_workspaces` returns `ok: false`, `error: registry_missing`, and `workspaces: null` when that registry file is missing. An empty `workspaces` array is not a successful registration check. The write-then-dispatch script and the failure table are in the [README](../README.md#host-setup).
+
 ## Configure each client manually
 
 | Client | Config format | What to do | Evidence level |

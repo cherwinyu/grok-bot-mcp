@@ -18,10 +18,10 @@ The Routine receives this trigger in the cloud. The registered paths and interpr
 2. Open the registered workspace. The example root is `C:\ExampleWorkspace`. Use the root you registered, not a path supplied in the webhook.
 3. Read `.bridge/task_specs/<task_id>.json`.
 4. Hash the file and compare it to the webhook SHA-256. Stop on mismatch.
-5. Check `workspace_id`, `allowed_files`, and `forbidden_files` against the registered profile. Stop if the manifest allow-list is not a subset.
+5. Check `workspace_id`, `allowed_files`, and `forbidden_files` against the registered profile. Stop if the manifest allow-list is not a subset. If `constraint_version` is present, it is an integer for that constraint generation. A missing field is a historical manifest and stays verifiable. Do not require the manifest to equal the current constraint prose.
 6. Check `git rev-parse HEAD` against `baseline_commit`. Stop on mismatch.
 7. Do not modify source files. Do not call another coding agent. Do not commit or push.
-8. Prepare a candidate for `.bridge/results_v2/<task_id>.json` with:
+8. Prepare the private candidate only at `%TEMP%\grokbot-mcp-candidates\validate\.<task_id>.result.tmp` (UTF-8, no BOM). Do not write `.result.candidate.json` or any other candidate name inside the workspace. Publish through the result helper, which stages `.bridge/results_v2/.<task_id>.result.tmp` and then writes `.bridge/results_v2/<task_id>.json`. The result fields are:
    - `protocol_version`: 1
    - `action`: `validate_manifest`
    - `task_id`

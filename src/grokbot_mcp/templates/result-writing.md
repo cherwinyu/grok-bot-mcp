@@ -5,16 +5,29 @@ The only valid integer measurements are actual observed counts. JSON `true`/`fal
 
 `pending` and `running` require complete identity and need not contain counters. Do not state that unrun tests passed. A code failure before testing uses `status: failed` and `tests: {command_id: <registered ID>, not_run: true}`, with no invented counts/exit code. A real failed test uses measured counts and its real exit code. `succeeded` requires zero failed tests and exit code zero. Validation success also requires no source modification, no validation errors and `validation_passed: true`.
 
-First write the intended UTF-8, no-BOM result JSON to a private candidate file, NOT the final result. The candidate file is only input. The helper derives the same-directory staging path and final result path from the registry and accepted task identity; it never accepts an arbitrary destination. Review the measured fields before running these commands.
+First write the intended UTF-8, no-BOM result JSON to the one private candidate path, NOT the final result and NOT a name invented inside the workspace. The private candidate is `$env:TEMP\grokbot-mcp-candidates\{{PHASE}}\.<id>.result.tmp`. That filename is the same `.<id>.result.tmp` name as the official staged file. Validate and execute use the same filename rule; the phase directory and the later staged directory differ. `result_cli --source` accepts only that temp path and rejects every other location, including any path inside the registered workspace. `.result.candidate.json` and `.candidate_<id>.json` are not protocol names. Do not create them.
+
+The helper then writes the staged file `.bridge/results_v2/.<task-id>.result.tmp` or `.bridge/results_execute/.<execution-id>.result.tmp` and publishes `<id>.json` in that same directory. It never accepts an arbitrary destination. Review the measured fields before running these commands.
+
+After a terminal publish (`succeeded` or `failed`), the helper deletes that id's staged file and, when the temp candidate bytes are exactly the published bytes, the temp candidate. It records the cleanup in `.bridge/protocol_cleanup/{{PHASE}}/<id>.json`. It does not modify the submission ledger or the published result, and it does not delete another id or a non-contract name. Do not delete `.bridge` files yourself. If a contract temp file remains, rerun the same command with `--cleanup`. Pending and running publishes leave the staged file in place.
 
 ```powershell
 # Use the {{ID_FIELD}} received and verified for THIS accepted task; never reuse an old ID.
+# Set these in THIS process. A later background shell does not inherit them.
 $id = '<received {{ID_FIELD}}>'
-$candidate = '<absolute private candidate JSON file>'
 $python = {{PYTHON_PS}}
 $registry = {{REGISTRY_PS}}
 $workspace = {{WORKSPACE_PS}}
 $root = {{ROOT_PS}}
+$candidateDir = Join-Path $env:TEMP 'grokbot-mcp-candidates\{{PHASE}}'
+New-Item -ItemType Directory -Force -Path $candidateDir | Out-Null
+$candidate = Join-Path $candidateDir ('.' + $id + '.result.tmp')
+# Replace the here-string with the measured result for THIS id. Do not pass JSON to python -c.
+$json = @'
+<measured UTF-8 result JSON for this id>
+'@
+$utf8 = New-Object System.Text.UTF8Encoding $false
+[System.IO.File]::WriteAllText($candidate, $json, $utf8)
 $base = @('-I','-X','utf8','-m','grokbot_mcp.result_cli',
           '--registry',$registry,'--workspace',$workspace,'--phase','{{PHASE}}','--id',$id)
 

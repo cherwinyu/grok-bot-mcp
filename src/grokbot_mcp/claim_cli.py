@@ -32,6 +32,8 @@ def parse_cli(argv: list[str]) -> tuple[str | None, str | None, str | None]:
         return None, None, "too_many_arguments"
     if workspace_id is None:
         listed = list_workspaces()
+        if listed.get("error"):
+            return None, None, str(listed["error"])
         items = listed.get("workspaces")
         if not isinstance(items, list) or len(items) != 1:
             return None, None, "workspace_required"

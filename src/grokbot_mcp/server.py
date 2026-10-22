@@ -29,7 +29,7 @@ mcp = MCPServer(
 
 @mcp.tool(structured_output=False)
 def grok_list_workspaces() -> dict:
-    """List registered workspace ids. Sends no webhook and does not reveal keys."""
+    """List registered workspace ids. A missing registry returns ok=false, not an empty list. Sends no webhook and does not reveal keys."""
     return facade.list_workspaces()
 
 

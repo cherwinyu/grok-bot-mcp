@@ -21,10 +21,11 @@ def failure(exc: Exception) -> dict:
     # Codes originate in this package, never from repr/str of external exceptions.
     from grokbot_mcp.result_contract import ContractError
     from grokbot_mcp.registry import RegistryError
+    from grokbot_mcp.manifest.store import ManifestError
     from grokbot_mcp.diagnostics import CATALOG
     if isinstance(exc, ContractError):
         info = exc.report()
-    elif isinstance(exc, (LocalError, RegistryError)):
+    elif isinstance(exc, (LocalError, RegistryError, ManifestError)):
         info = {"code": exc.code}
     elif type(exc) is ValueError and str(exc) in CATALOG:
         info = {"code": str(exc)}

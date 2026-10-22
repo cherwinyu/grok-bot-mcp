@@ -13,7 +13,22 @@ from grokbot_mcp.storage import read_json, utc_now, write_json_new
 MAX_DESCRIPTION = 2000
 MAX_CRITERION = 500
 MAX_ACCEPTANCE = 20
+# Bump this when the constraint generation changes. Verifiers accept every
+# integer from 1 through this value, and manifests that omit the field.
+# They must not require the stored manifest to equal the current constraint prose.
+CONSTRAINT_VERSION = 1
 _ABSOLUTE = re.compile(r"(?:[A-Za-z]:[\\/]|https?://|\\\\)", re.IGNORECASE)
+
+
+def constraint_version_accepted(value: object, *, present: bool = True) -> bool:
+    """Historical manifests omit the field and stay verifiable after upgrades.
+
+    A present value must be an integer in ``1..CONSTRAINT_VERSION``. Equality
+    with the current constraint text is not a requirement and is not checked.
+    """
+    if not present:
+        return True
+    return type(value) is int and 1 <= value <= CONSTRAINT_VERSION
 
 
 class ManifestError(Exception):
@@ -57,6 +72,7 @@ def prepare_manifest(
         "acceptance_criteria": criteria,
         "allowed_files": files,
         "baseline_commit": workspace.expected_head,
+        "constraint_version": CONSTRAINT_VERSION,
         "created_at": utc_now(),
         "execution_timeout": timeout,
         "forbidden_files": list(workspace.forbidden_files),
@@ -80,6 +96,7 @@ def prepare_manifest(
         "workspace_id": workspace.workspace_id,
         "manifest_path": relative,
         "manifest_sha256": digest,
+        "constraint_version": stored.get("constraint_version"),
         "validation_status": "valid",
         "action_required": "none",
         "webhook_sent": False,
@@ -92,9 +109,12 @@ def load_manifest(root: Path, task_id: str) -> tuple[dict[str, object], str]:
     if not path.is_file():
         raise ManifestError("manifest_missing")
     try:
-        return read_json(path)
+        document, digest = read_json(path)
     except ValueError as exc:
         raise ManifestError(str(exc)) from exc
+    if not constraint_version_accepted(document.get("constraint_version"), present="constraint_version" in document):
+        raise ManifestError("constraint_version_unsupported")
+    return document, digest
 
 
 def _text(value: object, limit: int, code: str) -> str:

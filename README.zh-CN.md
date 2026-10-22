@@ -49,6 +49,73 @@ Windows Cursor / Codex --stdio--> 本机 Bridge
 
 云端与 Windows 磁盘不能天然共享，真实命令需要用户独立审批，HTTP 200 只是接收。**`advisory_precheck` 为应用层白名单，不是 Windows OS 沙箱。** 外部 Agent 可能有更大权限，不建议用敏感项目测试，也不要为通过演示而打开 Always Allow。[威胁模型](docs/security/THREAT_MODEL.md) · [数据边界](docs/data-boundaries.zh-CN.md)。
 
+## 宿主配置
+
+<a id="host-setup"></a>
+
+用 `client_cli fragment` 生成片段（见 [Cursor / Codex CLI](docs/client-compatibility.zh-CN.md)）。下面的路径自检必须和后续命令在**同一个** PowerShell 进程里。后开的后台 shell 不会继承上一条命令设置的环境变量。
+
+~~~powershell
+$BridgePython = 'C:\Example Bridge\Scripts\python.exe'
+$Registry = 'C:\Example Config\registry.json'
+if (-not (Test-Path -LiteralPath $BridgePython)) { throw 'python_path_missing' }
+if (-not (Test-Path -LiteralPath $Registry)) { throw 'registry_path_missing' }
+& $BridgePython -I -X utf8 -c "import grokbot_mcp; print(grokbot_mcp.__version__)"
+~~~
+
+Cursor `mcp.json`：
+
+~~~json
+{
+  "mcpServers": {
+    "grokbot-mcp": {
+      "command": "C:\\Example Bridge\\Scripts\\python.exe",
+      "args": ["-I", "-X", "utf8", "-m", "grokbot_mcp.server"],
+      "env": { "GROKBOT_MCP_REGISTRY": "C:\\Example Config\\registry.json" }
+    }
+  }
+}
+~~~
+
+Codex CLI `config.toml`：
+
+~~~toml
+[mcp_servers."grokbot-mcp"]
+command = "C:\\Example Bridge\\Scripts\\python.exe"
+args = ["-I", "-X", "utf8", "-m", "grokbot_mcp.server"]
+env = { GROKBOT_MCP_REGISTRY = "C:\\Example Config\\registry.json" }
+~~~
+
+注册表文件不存在时，`grok_list_workspaces` 返回 `ok: false`、`error: registry_missing`、`workspaces: null`。这不是「已登记但没有工作区」。
+
+先把结果写成固定临时候选，再调用 `result_cli`。不要把 JSON 塞进 `python -c`。两个阶段的文件名都是 `.<id>.result.tmp`。Validate 目录是 `%TEMP%\grokbot-mcp-candidates\validate\`，Execute 是 `...\execute\`。助手再写入 `.bridge/results_v2/.<task-id>.result.tmp` 或 `.bridge/results_execute/.<execution-id>.result.tmp`。`.result.candidate.json` 不是协议文件名。
+
+~~~powershell
+$Phase = 'validate'   # 或 execute
+$Id = '<收到的 task_id 或 execution_id>'
+$candidateDir = Join-Path $env:TEMP ("grokbot-mcp-candidates\" + $Phase)
+New-Item -ItemType Directory -Force -Path $candidateDir | Out-Null
+$candidate = Join-Path $candidateDir ('.' + $Id + '.result.tmp')
+$json = @'
+{"protocol_version": 1}
+'@
+$utf8 = New-Object System.Text.UTF8Encoding $false
+[System.IO.File]::WriteAllText($candidate, $json, $utf8)
+& $BridgePython -I -X utf8 -m grokbot_mcp.result_cli --registry $Registry --workspace demo-workspace --phase $Phase --id $Id --source $candidate
+~~~
+
+把 here-string 换成实测结果，再按 [结果写回](routines/result-writing.md) 执行 `--stage` 和 `--publish`。新 manifest 含 `constraint_version`。没有该字段的历史 manifest 仍可核验。不要要求 manifest 等于当前约束正文。
+
+本仓库没有宿主侧范围纠正框架。失败收据保留。不要删除，也不要换一个新 ID 重发同一次提交。
+
+| 失败 | 本桥的行为 | 本仓库中的入口 |
+|---|---|---|
+| `registry_missing` | `grok_list_workspaces` 返回 `ok: false`，`workspaces` 为 null | 在当前进程把 `GROKBOT_MCP_REGISTRY` 指到存在的登记文件 |
+| 发布前的格式或身份错误 | 拒绝发布。最终结果和提交账本不变 | 修改临时候选后，对同一个 ID 再次运行 `result_cli`。不要重发 |
+| 终态或已冻结结果 | 拒绝替换。失败收据保留 | 这里没有纠正工具。不要删除或改写收据 |
+| `unknown_submission` | 不会重发 | 没有纠正入口。观察原任务 |
+| 终态发布后的暂存或临时文件 | 只删除该 ID 的 `.<id>.result.tmp` 暂存文件，以及字节一致的临时候选，并写入 `.bridge/protocol_cleanup/<phase>/<id>.json` | `result_cli --phase validate --id <task-id> --cleanup`，或 `--phase execute` 加 execution id。不删除已发布 JSON、提交账本、其它 ID，或 `.result.candidate.json` |
+
 ## 接入和反馈
 
 可只读生成 Cursor JSON 与 Codex CLI TOML 配置片段；必须自行审阅并导入支持的客户端。[双客户端配置](docs/client-compatibility.zh-CN.md) · [快速开始](docs/quickstart.zh-CN.md) · [支持矩阵](docs/beta-support.zh-CN.md) · [FAQ](docs/faq.zh-CN.md)。

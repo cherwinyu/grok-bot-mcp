@@ -39,7 +39,14 @@ This checks all ten examples without writing files or loading credentials: valid
 
 ## Safe publication / 安全预检与写回
 
-Create a private candidate JSON outside the business result location. Precheck it first:
+Create the private candidate outside the workspace, at the one path `result_cli` accepts. The filename matches the official staged name. Validate and execute use the same rule:
+
+- validate: `%TEMP%\grokbot-mcp-candidates\validate\.<task-id>.result.tmp`
+- execute: `%TEMP%\grokbot-mcp-candidates\execute\.<execution-id>.result.tmp`
+
+`--source` rejects every other location, including a candidate inside the registered workspace and any `*.result.candidate.json` name. The helper copies that temp file to the staged path and publishes the final JSON. It does not accept an arbitrary destination.
+
+Precheck it first:
 
 ```powershell
 $ResultArgs = @('--registry', $Registry, '--workspace', $Workspace, '--phase', 'execute', '--id', $ExecutionId)
@@ -50,11 +57,17 @@ $ResultArgs = @('--registry', $Registry, '--workspace', $Workspace, '--phase', '
 & $BridgePython -I -X utf8 -m grokbot_mcp.result_cli @ResultArgs --staged $StagedJson --publish --confirm-sha256 $CandidateHash
 ```
 
-The registered staging path is `.bridge/results_execute/.<execution-id>.result.tmp`, or `.bridge/results_v2/.<task-id>.result.tmp`. The final name is `<id>.json` in that same directory. The helper derives both; it refuses traversal, links/reparse points/hardlinks, arbitrary output paths, mismatched identity, unaccepted/uncertain submissions, absent or mismatched required claims, frozen ledger evidence and existing terminal results even before observation. JSON must be complete UTF-8 without BOM, duplicate keys or NaN. Incomplete/encoding faults report safe codes, not raw payloads.
+The registered staging path is `.bridge/results_execute/.<execution-id>.result.tmp`, or `.bridge/results_v2/.<task-id>.result.tmp`. The final name is `<id>.json` in that same directory. The helper derives both; it refuses traversal, links/reparse points/hardlinks, arbitrary output paths, a `--source` outside the temp candidate contract, mismatched identity, unaccepted/uncertain submissions, absent or mismatched required claims, frozen ledger evidence and existing terminal results even before observation. JSON must be complete UTF-8 without BOM, duplicate keys or NaN. Incomplete/encoding faults report safe codes, not raw payloads.
+
+After a **terminal** publish (`succeeded` or `failed`), the helper deletes that id's staged file and the temp candidate when the candidate bytes are exactly the published bytes. It appends `.bridge/protocol_cleanup/<phase>/<id>.json`. The submission ledger and the published result are not modified. Other ids, the published `<id>.json`, and non-contract names such as `.result.candidate.json` are not deleted. Pending and running publishes leave the staged file in place. `result_cli --phase <validate|execute> --id <id> --cleanup` repeats that same limited deletion for a terminal result. Do not delete `.bridge` files by hand.
+
+## Manifest constraint version / manifest 约束版本
+
+New manifests include integer `constraint_version` (currently `1`). The value identifies the constraint generation stored with that task. Historical manifests that omit the field stay verifiable. A later generation accepts every integer from 1 through the current version. Verification uses the manifest SHA-256, task id, workspace id, `allowed_files`, and this version. It does not require the manifest to equal the current constraint prose, and this repository does not store that prose on the manifest.
 
 To replace a previous **temporary** stage after reviewing corrected content, also pass the exact `--previous-staged-sha256` returned by a new preview. This is not permission to replace final evidence. The helper rechecks under the existing ledger lock, verifies snapshot hashes and uses same-directory atomic replacement. It creates no claim, authorization or ledger transition, enables no switch and sends no Webhook. Pending→running→terminal is allowed; pending→terminal is allowed with complete matching evidence; running→pending and terminal replacement are refused. A final format error bypassing this helper may already be frozen by bridge observation; do not resend or replace it.
 
-先预检私人候选，再显式写入任务约定的同目录暂存文件；暂存校验通过后才显式发布到派生目标。修改暂存也需旧字节哈希确认。发布器不造 claim、不授予授权、不改账本、不解锁执行。半写 JSON/UTF-8 边界只返回稳定代码，不泄漏原文。
+私人候选只能写在 `%TEMP%\grokbot-mcp-candidates\<phase>\.<id>.result.tmp`。文件名与正式暂存名相同，位置必须在工作区之外。`--source` 拒绝其它路径，包括工作区内的 `.result.candidate.json`。先预检该临时文件，再显式写入任务约定的暂存文件，通过后才发布。终态发布后只删除该 ID 的暂存文件和字节一致的临时候选，并记入 `.bridge/protocol_cleanup/`；不改提交账本，不删已发布结果。历史 manifest 可以没有 `constraint_version`；有该字段时按 1 到当前版本核验，不要求约束正文与当前文本相同。修改暂存也需旧字节哈希确认。发布器不造 claim、不授予授权、不改账本、不解锁执行。半写 JSON/UTF-8 边界只返回稳定代码，不泄漏原文。
 
 Read the result through the original `grok_get_status` workflow afterwards. `published=true`, `format_valid=true`, `identity_valid=true` do not imply `bridge_accepted` or `qa_accepted`. Diagnostic categories distinguish `format_error`, `identity_error`, `intermediate_result`, `validation_failure`, `test_failure`, and `code_execution_failure`. A diagnosis provides field/expected type only, never copies the sensitive bad value.
 

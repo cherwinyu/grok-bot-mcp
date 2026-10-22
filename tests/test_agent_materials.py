@@ -85,6 +85,19 @@ class AgentEntryTest(unittest.TestCase):
 
 
 class MaterialConsistencyTest(DeploymentCase):
+    def test_host_readme_states_the_candidate_and_registry_contract(self):
+        root = Path(__file__).resolve().parents[1]
+        readme = (root / "README.md").read_text(encoding="utf-8")
+        for text in (readme, (root / "README.zh-CN.md").read_text(encoding="utf-8")):
+            self.assertIn("grokbot-mcp-candidates", text)
+            self.assertIn("UTF8Encoding $false", text)
+            self.assertIn("registry_missing", text)
+            self.assertIn("mcpServers", text)
+            self.assertIn('mcp_servers."grokbot-mcp"', text)
+            self.assertIn("constraint_version", text)
+            self.assertIn("--cleanup", text)
+            self.assertIn("workspaces: null", text)
+
     def test_source_and_packaged_templates_are_identical(self):
         root = Path(__file__).resolve().parents[1]
         for path in (root / "routines").glob("*.md"):
@@ -98,6 +111,10 @@ class MaterialConsistencyTest(DeploymentCase):
                 output = setup_wizard.generate(self.registry, WORKSPACE_ID, mode)
                 text = (output / "routine-setup.md").read_text(encoding="utf-8")
                 self.assertIn("grokbot_mcp.result_cli", text)
+                self.assertIn("grokbot-mcp-candidates", text)
+                self.assertIn(".result.tmp", text)
+                self.assertIn("are not protocol names", text)
+                self.assertNotIn("<absolute private candidate", text)
                 self.assertIn("--confirm-sha256", text)
                 self.assertIn("--previous-staged-sha256", text)
                 self.assertNotIn("{{", text)

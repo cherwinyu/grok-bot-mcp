@@ -39,7 +39,7 @@ Each finding has a stable `code`, ordinary-language `reason`, affected operation
 |---|---|
 | `python_interpreter_invalid`, `python_unsupported`, `installation_mismatch` | Use a real Python 3.12 installation and a separate installed venv; preserve the active installation. 使用准确安装解释器，不覆盖现用环境。 |
 | `git_missing`, `git_unavailable` | Install/repair Git, reopen PowerShell and run `git --version`. |
-| `registry_missing`, `unknown_workspace` | Run the same wizard without `--check`; register/select the intended ID. 用向导创建或选择登记。 |
+| `registry_missing`, `unknown_workspace` | `grok_list_workspaces` returns `ok: false` and `workspaces: null` when the registry file is missing. Check `Test-Path` on the interpreter and `GROKBOT_MCP_REGISTRY` in the same process, then run the wizard without `--check`. 注册表缺失不是空工作区列表。 |
 | `registry_unreadable`, `registry_invalid` | Check access and the selected file. Preserve it; do not replace it with an example. 检查权限／格式，保留原文件。 |
 | `git_status_failed`, `workspace_path_invalid`, exact-file errors | Verify the intended committed Git root and exact filenames. 不用相似文件名扩展白名单。 |
 | `credentials_missing`, `credentials_unreadable` | Resume hidden input for the indicated phase. Never put keys into JSON, issues or logs. |
