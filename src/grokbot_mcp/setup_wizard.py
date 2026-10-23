@@ -156,7 +156,9 @@ def generate(registry: Path, workspace_id: str, mode: str = "reuse") -> Path:
     raw = json.loads(registry.read_text(encoding="utf-8"))
     entry = next(w for w in raw["workspaces"] if w["workspace_id"] == workspace_id)
     instructions = entry.get("setup_test_instructions", {})
-    claim = "& '" + interpreter().replace("'", "''") + "' -I -X utf8 -m grokbot_mcp.claim_cli --workspace " + workspace_id + " <execution_id>"
+    from grokbot_mcp.routine import claim_command
+    from grokbot_mcp.registry import policy_fingerprint
+    claim = "& '" + interpreter().replace("'", "''") + "' -I -X utf8 -m " + claim_command(workspace_id, policy_fingerprint(workspace))
     guidance = {
         "reuse": "复用旧 Routine/Webhook，更新领取入口：reuse_scope=retain-routine-update-claim。"
                  "保留原 Routine、Webhook 和凭据，不创建重复项；先核对目录、工作区 ID、基线和白名单。"
@@ -192,7 +194,8 @@ def generate(registry: Path, workspace_id: str, mode: str = "reuse") -> Path:
     for phase in ("validate", "execute"):
         text += f"## Routine: grok-bridge-{workspace_id}-{phase}\n\n" + render_routine(
             phase, workspace_root=workspace.root, workspace_id=workspace_id, registry=registry,
-            python=Path(interpreter()), mode=mode, test_options=profile) + "\n"
+            python=Path(interpreter()), mode=mode, test_options=profile,
+            expected_fingerprint=policy_fingerprint(workspace)) + "\n"
     text += "\n核对、创建或迁移完成后，告知我在哪里查看各自的 Webhook URL 和密钥。不要把密钥写入聊天或文件。由我回到本地向导填写，并确认是否已启用。\n"
     output = registry.parent / "setup" / workspace_id
     checklist = (

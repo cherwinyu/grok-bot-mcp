@@ -42,7 +42,7 @@ These directories are local state. Do not publish them.
 
 ## Claim
 
-`python -m grokbot_mcp.claim_cli --workspace <id> <execution_id>` locks the ledger, checks the grant, and creates the claim file with `O_EXCL`. The returned `allowed_files` are the exact paths from the manifest after an on-disk name check. A nearby filename is rejected.
+`python -m grokbot_mcp.claim_cli --workspace <id> --expect-fingerprint <policy_fingerprint from this paste packet> <execution_id>` locks the ledger, checks the grant, and creates the claim file with `O_EXCL`. The returned `allowed_files` are the exact paths from the manifest after an on-disk name check. A nearby filename is rejected.
 
 `enforcement` is `advisory_precheck`. The claim does not confine the process with an OS sandbox.
 

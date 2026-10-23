@@ -363,8 +363,18 @@ def get_status(workspace_id: str, task_id: str = "", execution_id: str = "", *,
 
 
 @guarded
-def claim_for(workspace_id: str, execution_id: str) -> dict[str, object]:
+def claim_for(workspace_id: str, execution_id: str, *, expected_fingerprint: str | None = None) -> dict[str, object]:
+    if expected_fingerprint is not None:
+        import re
+        if not isinstance(expected_fingerprint, str) or re.fullmatch(r"[0-9a-f]{64}", expected_fingerprint) is None:
+            return {"ok": False, "error": "invalid_expected_fingerprint"}
     workspace, error, siblings = _workspace(workspace_id)
     if error is not None or workspace is None:
         return error or _closed("unknown_workspace", workspace_id)
+    if expected_fingerprint is not None:
+        from grokbot_mcp.registry import policy_fingerprint
+        current = policy_fingerprint(workspace)
+        if expected_fingerprint != current:
+            return {"ok": False, "error": "routine_binding_mismatch",
+                    "expected_fingerprint": expected_fingerprint, "policy_fingerprint": current}
     return claim_execution(workspace, execution_id, siblings)

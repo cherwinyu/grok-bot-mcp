@@ -122,7 +122,8 @@ class RoutineCheckTest(unittest.TestCase):
         text = "```json\n" + json.dumps(profile) + "\n```\n```json\n" + json.dumps(bindings) + "\n```\n"
         for phase in ("validate", "execute"):
             text += render_routine(phase, workspace_root=self.ws.root, workspace_id=self.ws.workspace_id,
-                registry=self.registry, python=self.python, mode="create", test_options=profile)
+                registry=self.registry, python=self.python, mode="create", test_options=profile,
+                expected_fingerprint=policy_fingerprint(self.ws))
         return text
 
     def inspect(self, text):
