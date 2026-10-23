@@ -156,3 +156,29 @@ Routine 发现 claim 前缀超出其嵌入上限、或哈希不符时必须停�
 `runtime_drift` 比较启动时和当前的包、注册表哈希；包文件变化只在 `warnings` 中增加
 `process_restart_recommended`，不改变 `blocking_reasons`。安装更新后应重启 MCP 进程并核对身份；
 这些提示不授予执行权限，也不证明远端可达。
+## 本地校验
+
+管理员可为 advisory 工作区登记 `"local_validation": true`；缺省为 false，
+strict 模式不允许启用。只有 true 进入策略指纹；省略或 false 保持原指纹及
+Routine 内容（版本横幅除外）。启用会改变策略身份，需重新审核并确认 execute 绑定。
+
+启用后，`grok_submit_validation` 在本机检查 manifest，不读取凭据、不发 webhook，
+因此不需要执行开关；发布证据仍要求 `writes_enabled`。`grok_prepare_execution`
+仅在该任务既无校验账本又无结果时自动校验，已有结果、未知提交和冻结失败沿用原处理，不能重发。
+
+本机复用 admission 的身份、哈希、禁区、精确范围及冻结前缀上限检查。HEAD 保持 advisory
+语义：与登记 HEAD 不同本身不拒绝；Git 无法读取、无效 manifest 基线和保护路径变化仍拒绝。
+claim 继续全量核对基线和范围。本地接纳时记录哈希，并在 assessment 重读比较；这不是
+对更早文件字节的外部证明。
+
+结果写入 `.bridge/results_v2/<task_id>.json`，复用原子发布及普通读取、校验、冻结流程。
+结果附 `validator: "bridge_local"` 和策略指纹；失败写 `status: "failed"` 与
+`validation_errors`。提交返回 `webhook_sent: false`、`validated_locally: true`。
+claim 和执行核对要求当前仍启用本地校验且指纹一致，否则返回
+`local_validation_policy_mismatch`；无 validator 的旧结果保持原语义。
+
+`grok_get_status` 可传整数 `wait_seconds`（0～50），默认 0 保持原返回。
+非零时以 1、2、4、5、5… 秒退避只读轮询，最后一次等待不超过剩余时间；遇到终态或
+完整且通过校验的结果立即返回，并附 `waited_ms`。等待后按原选项执行一次普通查询。
+`observe_only` 全程只读；与 `rerun_tests` 合用时先等待，再结算查询，仅终态执行本机复跑。
+`rerun_tests` 与 `observe_only` 仍不能合用。

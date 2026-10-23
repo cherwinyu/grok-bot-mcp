@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.5b2
+
+- Add advisory-only opt-in local validation, using shared manifest policy checks,
+  atomic result publication and frozen evidence. Execution preparation can validate
+  an untouched task locally; claim and execution reject changed local-validation policy.
+- Add bounded `grok_get_status(wait_seconds=0..50)` with read-only backoff polling,
+  elapsed milliseconds, observe-only support and terminal-only reruns after waiting.
+- Defaults preserve legacy policy fingerprints, Routine content (except version
+  banners), result behavior and the seven MCP tools. No real configuration or
+  Routine is changed and no publication is authorized by this source update.
+
 ## Unreleased
 
 - Add opt-in local registered test reruns through `grok_get_status(rerun_tests=true)` and `python -m grokbot_mcp.test_run_cli`. Independent append-only receipts compare exit status and output hashes without changing frozen execution evidence or QA state.

@@ -66,6 +66,28 @@ manifest 冻结当时的授权，claim 再校验其属于当前上限，结果�
 收缩生效前缀只影响后续任务，不撤销已准备任务；精确文件例外保持原语义且不能绕过禁区。
 审计日志是事后追溯手段，不是闸门；注册表替换与审计追加不构成跨文件原子事务。这不是 OS 沙箱。
 
+## Optional local validation
+
+An advisory registry may explicitly enable `local_validation`. This removes the
+independent Grok-side Validate pass: the local bridge performs those deterministic
+manifest/hash, identity, scope, forbidden-path and advisory Git checks instead.
+This is an accepted opt-in trade-off because Execute claim still rechecks the full
+manifest, frozen validation decision, policy fingerprint, baseline and exact scope.
+The local result carries `validator: "bridge_local"` and its policy fingerprint;
+claim and execution acceptance refuse it if that policy is changed or disabled.
+Legacy proofs without the marker retain their existing checks. This is local
+application consistency, not independent remote attestation or an OS sandbox.
+
+No switch or credentials are needed for local validation because no remote send
+occurs. Workspace writes must still be enabled for the existing result/ledger
+publication path. Execution retains its switch, binding, claim-once and no-resend
+requirements. Failed and uncertain evidence cannot be replaced or retried.
+See [local validation](advisory-workspaces.md#local-validation).
+
+本地校验显式移除了 Grok 端独立 Validate 检查。检查本身是确定性的，Execute claim
+仍全量复核身份、指纹、冻结证据、基线和范围，因此允许 advisory 工作区自行选择此权衡；
+这不构成远端独立证明或 OS 沙箱，也不豁免执行开关和禁止重发规则。
+
 ## Credential boundaries
 
 The validate target is never used as the execute key, and the reverse is also refused. The repository contains no credential value. Setup prompts do not echo the key and do not write it to a project file.
