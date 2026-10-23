@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Add opt-in local registered test reruns through `grok_get_status(rerun_tests=true)` and `python -m grokbot_mcp.test_run_cli`. Independent append-only receipts compare exit status and output hashes without changing frozen execution evidence or QA state.
+- Keep local `rerun` configuration out of policy fingerprints and generated Routine bytes. Validate argv, working-directory boundaries, environment keys and timeouts; preserve legacy status responses when omitted.
+
 - Add opt-in directory authorization (`allowed_prefixes`), exact prospective `create_files`, measured `not_created`, prefix-aware Routine packets and read-only `registry-prefixes` migration previews. Defaults preserve existing bytes; no version change. / 增加可选目录授权、新建文件声明、未创建清单、前缀模板与只读迁移预览；缺省兼容，不升版本。
 
 - Harden advisory path normalization (including Git octal UTF-8 quoting), case-insensitive forbidden checks and NFC result comparisons. Strict snapshot serialization is unchanged. / 加固 advisory 路径、Git 八进制 UTF-8 解码、禁区大小写匹配及结果 NFC 比较；strict 快照序列化不变。
