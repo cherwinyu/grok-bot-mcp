@@ -11,10 +11,17 @@ import hashlib
 import io
 import json
 from pathlib import Path
+
+if __package__:
+    from .source_version import source_version
+else:
+    try:
+        from source_version import source_version
+    except ModuleNotFoundError:
+        from scripts.source_version import source_version
 import re
 import sys
 import tarfile
-import tomllib
 import zipfile
 
 if __package__:
@@ -145,7 +152,10 @@ def sdist_members(raw: bytes, source_files: dict[str, bytes], version: str) -> i
 
 def verify(root: Path, wheelhouse: Path) -> dict:
     root, wheelhouse = root.absolute(), wheelhouse.absolute()
-    version = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))["project"]["version"]
+    # Source identity cannot be established from an installed-only sandbox.
+    if not (root / "src/grokbot_mcp/__init__.py").is_file():
+        raise CandidateError("source_tree_missing")
+    version = source_version(root)
     basename = "grokbot_mcp_bridge-" + version
     wheel_name = basename + "-py3-none-any.whl"
     sdist_name = basename + ".tar.gz"
