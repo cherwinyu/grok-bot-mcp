@@ -2,10 +2,11 @@ from __future__ import annotations
 import io
 import json
 import os
-import tempfile
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
+
+from tests.support import temporary_directory
 from unittest.mock import patch
 from grokbot_mcp import __version__, client_config as client, client_cli, deployment_diagnostics
 from grokbot_mcp.identity import RuntimeIdentity, compare_identity
@@ -16,7 +17,7 @@ from tests.support import WORKSPACE_ID
 
 class IdentityTest(unittest.TestCase):
     def test_installation_version_registry_and_process_lifetimes(self):
-        with tempfile.TemporaryDirectory() as directory:
+        with temporary_directory() as directory:
             root = Path(directory)
             reg = root / "登记.json"
             reg.write_text("{}", encoding="utf-8")

@@ -2,9 +2,10 @@ from __future__ import annotations
 import io
 import json
 import os
-import tempfile
 import unittest
 from pathlib import Path
+
+from tests.support import temporary_directory
 from contextlib import redirect_stdout
 from importlib.resources import files
 from grokbot_mcp import agent_cli, setup_wizard, result_examples
@@ -15,7 +16,7 @@ from tests.support import WORKSPACE_ID
 
 class AgentEntryTest(unittest.TestCase):
     def setUp(self):
-        self.temp = tempfile.TemporaryDirectory()
+        self.temp = temporary_directory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name) / "项目 agent 空格"
 

@@ -7,9 +7,16 @@ import shutil
 import subprocess
 import sys
 import tempfile
-import tomllib
 import zipfile
 from pathlib import Path
+
+if __package__:
+    from .source_version import source_version
+else:
+    try:
+        from source_version import source_version
+    except ModuleNotFoundError:
+        from scripts.source_version import source_version
 
 if __package__:
     from .scan_release import _link, _scan_archive, _scan_tree, load_markers
@@ -67,7 +74,7 @@ def main() -> int:
     if findings:
         print("\n".join(findings))
         return 1
-    version = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))["project"]["version"]
+    version = source_version(root)
     with tempfile.TemporaryDirectory(prefix="bridge-release-") as temporary:
         stage = Path(temporary) / "source"
         outputs = Path(temporary) / "artifacts"

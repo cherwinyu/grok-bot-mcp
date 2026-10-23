@@ -9,12 +9,13 @@ import contextlib
 import io
 import json
 import os
-import tempfile
 import threading
 import time
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+
+from tests.support import temporary_directory
 from unittest.mock import patch
 
 from grokbot_mcp import facade
@@ -29,7 +30,7 @@ class ReliabilityTest(unittest.TestCase):
         self.env = patch.dict(os.environ)
         self.env.start()
         self.addCleanup(self.env.stop)
-        self.temp = tempfile.TemporaryDirectory()
+        self.temp = temporary_directory()
         self.addCleanup(self.temp.cleanup)
         self.root = make_workspace(Path(self.temp.name))
         self.addCleanup(facade.install_transport, None)

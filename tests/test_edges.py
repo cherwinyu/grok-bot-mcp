@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import os
-import tempfile
 import unittest
 from pathlib import Path
+
+from tests.support import temporary_directory
 
 from grokbot_mcp import facade
 from grokbot_mcp.transport.webhook import post_once
@@ -31,7 +32,7 @@ class EdgeTest(unittest.TestCase):
         self.assertEqual(outcome.kind, "disabled")
 
     def test_writes_disabled_and_untracked_file(self) -> None:
-        with tempfile.TemporaryDirectory() as name:
+        with temporary_directory() as name:
             root = make_workspace(Path(name), writes=False)
             denied = facade.prepare_task(
                 WORKSPACE_ID,
@@ -43,7 +44,7 @@ class EdgeTest(unittest.TestCase):
             )
             self.assertEqual(denied["error"], "workspace_writes_disabled")
             self.assertFalse(denied["webhook_sent"])
-        with tempfile.TemporaryDirectory() as name:
+        with temporary_directory() as name:
             root = make_workspace(Path(name), writes=True)
             (root / "src/untracked_marker.py").write_text("draft\n", encoding="utf-8")
             denied = facade.prepare_task(
@@ -58,7 +59,7 @@ class EdgeTest(unittest.TestCase):
             self.assertFalse((root / ".bridge" / "task_specs").exists())
 
     def test_terminal_execution_cannot_be_claimed_again(self) -> None:
-        with tempfile.TemporaryDirectory() as name:
+        with temporary_directory() as name:
             root = make_workspace(Path(name))
             prepared = facade.prepare_task(
                 WORKSPACE_ID,

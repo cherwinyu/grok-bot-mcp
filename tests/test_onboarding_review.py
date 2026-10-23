@@ -15,9 +15,10 @@ import os
 import shutil
 import subprocess
 import sys
-import tempfile
 import unittest
 from pathlib import Path
+
+from tests.support import temporary_directory
 from unittest.mock import patch
 
 from grokbot_mcp import diagnostics as doctor, setup_wizard as wizard, facade
@@ -31,7 +32,7 @@ RESULTS = {}
 class BoundaryProbes(unittest.TestCase):
     def setUp(self):
         self.env=patch.dict(os.environ); self.env.start();self.addCleanup(self.env.stop)
-        self.tmp=tempfile.TemporaryDirectory(prefix='fictional-review-'); self.addCleanup(self.tmp.cleanup)
+        self.tmp=temporary_directory(prefix='fictional-review-'); self.addCleanup(self.tmp.cleanup)
         self.base=Path(self.tmp.name); self.root=make_workspace(self.base);self.registry=self.base/'registry.json'
         self.addCleanup(install_backend,None,None);self.addCleanup(facade.install_transport,None)
     def report(self,**kw):return doctor.collect(self.registry,WORKSPACE_ID,**kw)
@@ -306,7 +307,7 @@ class BootstrapConflictTest(unittest.TestCase):
         shell=shutil.which('pwsh')
         self.assertIsNotNone(shell,'Native Windows PowerShell probe is required; do not skip')
         script=Path(__file__).resolve().parents[1]/'scripts/setup.ps1'
-        with tempfile.TemporaryDirectory(prefix='fictional-check-conflict-') as name:
+        with temporary_directory(prefix='fictional-check-conflict-') as name:
             root=Path(name);fake=root/'fake-python.cmd';marker=root/'called.txt'
             fake.write_text('@echo off\necho CALLED>"%~dp0called.txt"\nexit /b 0\n',encoding='ascii')
             env={**os.environ,'LOCALAPPDATA':str(root)}
