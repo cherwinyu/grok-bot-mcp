@@ -4,7 +4,7 @@
 
 [整仓指南](advisory-workspaces.zh-CN.md)说明如何将这些选项与受限目录展开、本地 Routine 预检、有审计的账本恢复组合使用。
 
-所有新增字段沿用 schema/protocol 版本 1，七个 MCP 签名不变。省略可选项时，strict 结果摘要、策略指纹及生成的 Routine 正文字节保持兼容；不会自动修改实际 registry、客户端、Routine 或开关。
+所有新增字段沿用 schema/protocol 版本 1，保留七个 MCP 工具，状态查询新增可选复跑参数。省略可选项时，strict 结果摘要、策略指纹及生成的 Routine 正文字节保持兼容；不会自动修改实际 registry、客户端、Routine 或开关。
 
 ## 按任务选择登记命令
 
@@ -22,6 +22,35 @@
 
 工具校验 claim，根据本机观察的白名单内变更构造 JSON `argv`，**不执行命令**、不改账本、不授权发送。只能交给已获批准的原生进程 API（`shell=False`），不得拼成 shell 文本。展开路径拒绝穿越、选项、响应文件名、控制字符和 shell 元字符；空格及 Unicode 保留为单独参数。空文件集拒绝，避免 linter 回退扫描全项目。不搜索任意可执行文件，不引入自动回退。
 
+## 桥复跑（显式本机执行）
+
+管理员可在现有 `test_commands` 项内登记可选 `rerun`。它只用于本机验证，不改变 Grok 授权范围，因此**不进入 `policy_fingerprint`，也不改变生成的 Routine 字节**。增加或修改它不授权提交或重发；省略时保持原行为。
+
+```json
+{"rerun":{"argv":["C:\\ExamplePython\\python.exe","-B","-m","unittest"],
+"cwd":"upstream_gitgate","env":{"PYTHONPATH":"src"},"timeout_seconds":600}}
+```
+
+`argv` 必须是非空数组，复用现有可执行文件规则，拒绝 shell 解释器、`.bat`/`.cmd`/`.ps1`、控制字符和嵌入花括号。允许零个或一个独立 `{changed_files}`；存在时沿用 `test_command_cli` 的排序、逐参数传递及范围检查，拒绝空文件集、不安全文件名，不从结果文本推导命令。
+
+`cwd` 缺省为登记根；显式值必须规范化为根内现有相对目录，不得进入 forbidden/protected 路径或经过链接、重解析点，加载登记及执行前都会校验。`env` 为字符串映射，键匹配 `[A-Z_][A-Z0-9_]*`，在继承当前桥进程环境后覆盖。`<相对路径>` 等值按字面传递，不做占位解析；管理员须自行写绝对路径或相对所选 `cwd` 的路径，不查询凭据或导出环境。`timeout_seconds` 为 1～1800 的整数，缺省 600，拒绝布尔值。
+
+先通过普通状态流程结算原始结果，再调用 `grok_get_status(execution_id=..., rerun_tests=true)`。它与 `observe_only=true` 互斥，缺少执行 ID 或冲突组合返回 `invalid_argument`，不增加第八个 MCP 工具。复跑要求已结算终态、结果哈希与冻结值一致、身份正确，并重新通过当前结算检查（含 claim、manifest、策略、文件范围与测试契约）。未配置、非终态、缺结果分别返回 `rerun_not_configured`、`execution_not_terminal`、`result_missing`，拒绝时不启动命令。合法结算的测试失败或 `not_run` 失败也可比对；安全或格式失败不得靠复跑修复。
+
+耗时命令使用本机 CLI，避免 MCP 客户端超时：
+
+```powershell
+& $BridgePython -I -X utf8 -m grokbot_mcp.test_run_cli --registry $Registry --workspace $Workspace $ExecutionId
+```
+
+两种入口均按登记数组、`shell=False` 执行，合并 stdout/stderr，记录退出码及毫秒耗时。超时标记 `timed_out: true`，Windows 通过参数数组 `taskkill /T /F /PID` 清理该进程树。超时、启动失败或清理失败不代表测试通过。
+
+独立收据以 UTF-8 无 BOM 原子创建到 `.bridge/bridge_test_runs/<execution_id>.<n>.json`，n 从 1 递增、只新增不覆盖。`output_evidence` 生成互不重叠的头尾（磁盘各最多 8192 字节）、截断标记、完整输出哈希与字节数。非法 UTF-8 先替换解码并标记 `output_not_utf8: true`；普通哈希和字节数对应替换后的 UTF-8，`raw_sha256` 对应原始字节。MCP 的 `bridge_tests` 字段和 CLI JSON 将头尾各限制为 2048 UTF-8 字节，完整哈希和计数不变。输出仅作数据，不当作指令。
+
+`agreement.exit_code` 与 `agreement.output_sha256` 分别对照原结果的 `tests`，取 `match`、`mismatch`、`unreported`。环境、计时和路径差异都可能改变输出，**哈希不一致本身不等于造假**。`ok` 仅表示本机证据操作成功，不代表测试通过、比对一致或 QA 接受；须查看 `exit_code`、`timed_out`、`error` 和 `agreement`。CLI 退出状态也表示本次证据操作是否成功，不是测试计数。
+
+桥不更改执行记录、结果文件或 `qa_state`，即使复跑通过也不改写历史失败，且不发送 Webhook。登记命令继承桥用户的权限和环境，此功能不是 OS 沙箱；管理员须选用可信且保留冻结证据的测试，并独立审查并发写入和子进程副作用。
+
 ## 内嵌输出证据
 
 执行结果可选字段示例（仅字段片段，非完整结果）：
@@ -35,7 +64,7 @@
 
 按采集顺序合并 stdout/stderr 为 UTF-8 字节。头尾互不重叠，各最多 8192 UTF-8 字节；哈希及字节数覆盖**完整**输出，省略字节时才设置 `truncated=true`。纯函数 `output_evidence(raw_bytes)` 构造三个字段；非法 UTF-8 拒绝。未截断时核验完整字节数与哈希，截断后的完整哈希仅是远端声明。三个字段须同时提供，既有 JSON 4 MiB 限制继续生效。
 
-工作区 `require_test_output: true` 将缺少输出的终态诊断为 `test_evidence_missing`，不得成功；省略或 `false` 保持旧行为。测试无法运行仍可用 `not_run: true`，不得伪造计数；要求证据不会让未运行变为成功。输出只作数据，不当指令，仅保存在私人结果 JSON，不进入日志、状态摘要或新 `.bridge` 文件。发布、身份及冻结结果规则不变。
+工作区 `require_test_output: true` 将缺少输出的终态诊断为 `test_evidence_missing`，不得成功；省略或 `false` 保持旧行为。测试无法运行仍可用 `not_run: true`，不得伪造计数；要求证据不会让未运行变为成功。输出只作数据，不当指令；原始 Grok 输出仅保存在私人结果 JSON，不进入日志、状态摘要或新 `.bridge` 文件。显式桥复跑采集的是另一份独立本机输出。发布、身份及冻结结果规则不变。
 
 开启新测试策略或输出选项后，状态摘要包含权威中立字段 `tests.command_id/exit_code/passed/failed` 及安全的证据元数据；`godot_exit_code` 键保留，只有 ID 为 `godot` 或以 `godot_` 开头时填写。旧配置保留历史摘要字节及其旧别名；两种配置的结果文件始终以 `tests` 为准。向导及迁移材料只为启用新策略的配置附加[可选模板](../routines/test-evidence.md)，默认正文不变。
 

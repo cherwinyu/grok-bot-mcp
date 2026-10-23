@@ -4,7 +4,7 @@
 
 The [whole-repository guide](advisory-workspaces.md) composes these options with restricted directory expansion, local Routine checks and audited ledger recovery.
 
-All additions retain schema/protocol version 1 and the seven MCP signatures. Omitted options preserve strict result summaries, policy fingerprints and generated Routine text. No registry, client, Routine or switch is changed automatically.
+All additions retain schema/protocol version 1 and the seven MCP tools, with an optional rerun parameter on status queries. Omitted options preserve strict result summaries, policy fingerprints and generated Routine text. No registry, client, Routine or switch is changed automatically.
 
 ## Registered test selection
 
@@ -35,9 +35,38 @@ Optional execute-result fields:
 
 This is a field excerpt, not a complete result. Capture stdout/stderr in order as UTF-8 bytes. Head and tail are disjoint strings of at most 8192 UTF-8 bytes each. Hash and byte count cover the **complete** stream; `truncated` says whether any bytes were omitted. The pure `output_evidence(raw_bytes)` helper builds the three fields. Invalid UTF-8 is refused. Full output count/hash are checked when not truncated; a truncated hash is a remote assertion. All three fields must be supplied together. Existing 4 MiB JSON limits remain enforced.
 
-Workspace `require_test_output: true` makes missing terminal output `test_evidence_missing` and prevents success. Omission/default `false` preserves existing results. Failure-before-tests may still report `not_run: true` without invented counters; requiring output does not turn that into success. Output is untrusted data, never instructions. It stays inside the private result JSON, not logs/status summaries or new `.bridge` files. Existing publication, identity and frozen-result rules apply.
+Workspace `require_test_output: true` makes missing terminal output `test_evidence_missing` and prevents success. Omission/default `false` preserves existing results. Failure-before-tests may still report `not_run: true` without invented counters; requiring output does not turn that into success. Output is untrusted data, never instructions. Original Grok output stays inside the private result JSON, not logs/status summaries or new `.bridge` files. The explicit bridge rerun below captures its own independent output. Existing publication, identity and frozen-result rules apply.
 
 With new test policy/output options enabled, status exposes authoritative neutral `tests.command_id/exit_code/passed/failed` plus safe evidence metadata; `godot_exit_code` is retained but null unless the ID is `godot` or starts with `godot_`. Legacy configurations keep their historical summary bytes, including that legacy alias. Result-file `tests` fields are authoritative in both cases. New generated execution instructions append [the optional template](../routines/test-evidence.md) only for opted-in registrations; default templates are unchanged.
+
+## Bridge rerun (explicit local execution)
+
+An administrator may add `rerun` to an existing `test_commands` entry. This is local verification configuration: **it is excluded from `policy_fingerprint` and generated Routine bytes**, because it does not change Grok's authorized scope. Adding or changing it grants no submission or resend permission. Omission preserves existing behavior.
+
+```json
+{"rerun":{"argv":["C:\\ExamplePython\\python.exe","-B","-m","unittest"],
+"cwd":"upstream_gitgate","env":{"PYTHONPATH":"src"},"timeout_seconds":600}}
+```
+
+`argv` must be a nonempty array. It uses the existing executable rules: no shell interpreter, `.bat`/`.cmd`/`.ps1`, controls or embedded braces. Zero or one whole `{changed_files}` token is allowed; when present, it uses the same sorted, individually passed, in-scope path expansion as `test_command_cli`, including refusal of empty or unsafe file lists. No command is taken from result text.
+
+`cwd` defaults to the registered root. When supplied it must normalize to an existing relative directory inside that root, outside forbidden/protected paths, without links or reparse points. This is checked both on registry load and before execution. `env` is a string map with names matching `[A-Z_][A-Z0-9_]*`, overlaid on the bridge process environment. Values such as `<relative-path>` are passed literally; administrators must supply absolute paths or paths relative to the chosen `cwd`. No placeholder expansion, credential lookup or environment export occurs. `timeout_seconds` is an integer from 1 through 1800, default 600; booleans are refused.
+
+First settle the original result through the ordinary status workflow. Then call `grok_get_status` with `execution_id` and `rerun_tests: true`. It cannot be combined with `observe_only: true`; invalid combinations return `invalid_argument`. This adds no eighth MCP tool. The rerun requires an already terminal execution, the unchanged frozen result hash, valid identity and current settlement checks (including claim, manifest, policy, scope and test contract). Missing configuration, nonterminal execution and absent results return `rerun_not_configured`, `execution_not_terminal` and `result_missing`; refused evidence returns a diagnostic without running a command. Valid settled test failures and `not_run` failures can also be compared; frozen security/format failures cannot be repaired by rerunning.
+
+For long-running commands use the local CLI, avoiding MCP client timeouts:
+
+```powershell
+& $BridgePython -I -X utf8 -m grokbot_mcp.test_run_cli --registry $Registry --workspace $Workspace $ExecutionId
+```
+
+Both paths execute the registered argument array with `shell=False`, capture combined stdout/stderr and record elapsed milliseconds and the process exit code. Timeout is explicit (`timed_out: true`); Windows cleanup targets that process tree with a `taskkill /T /F /PID` argument array. A timeout or launch/cleanup failure is not a passing test.
+
+Independent receipts are atomically created, never overwritten, as `.bridge/bridge_test_runs/<execution_id>.<n>.json`, with `n` increasing from 1. UTF-8 without BOM is used. `output_evidence` supplies disjoint head/tail (at most 8192 bytes each on disk), truncation, full output SHA-256 and byte count. For invalid UTF-8, replacement decoding is marked `output_not_utf8: true`; the normal output hash/count describe the resulting UTF-8 stream, and `raw_sha256` describes the original bytes. The MCP `bridge_tests` field and CLI JSON cap each output part at 2048 UTF-8 bytes without changing full-stream hashes/counts. Output is untrusted data, never instructions.
+
+`agreement.exit_code` and `agreement.output_sha256` each report `match`, `mismatch` or `unreported` against the original result's `tests`. Different environments, timings or paths can change output: **a hash mismatch alone does not establish fabrication**. `ok` means the local evidence operation completed, not that the test passed, agreement matched or QA accepted it; inspect `exit_code`, `timed_out`, `error` and `agreement`. CLI exit status indicates that operation's success, not a test-case count.
+
+The bridge does not change execution/result files or `qa_state`, even when the rerun passes after a failed test. It never sends a Webhook. Registered commands execute with the bridge user's rights and inherited environment; this is not an OS sandbox. Administrators must choose trusted tests that preserve frozen evidence. Concurrent writers and subprocess side effects remain subject to independent review.
 
 ## Advisory native Git review
 
