@@ -7,6 +7,7 @@ import io
 import subprocess
 import unittest
 from dataclasses import replace
+from importlib.resources import files
 from pathlib import Path
 from unittest.mock import Mock, patch
 from contextlib import redirect_stdout
@@ -301,8 +302,13 @@ class MaterialTest(unittest.TestCase):
         self.assertIn("tests.output_sha256", new)
         self.assertIn("test_command_cli", new)
         self.assertNotIn("{{", new)
+        packaged = files("grokbot_mcp").joinpath("templates", "test-evidence.md").read_bytes()
+        self.assertIn("tests.output_sha256", packaged.decode("utf-8"))
         root = Path(__file__).resolve().parents[1]
-        self.assertEqual((root / "routines/test-evidence.md").read_bytes(), (root / "src/grokbot_mcp/templates/test-evidence.md").read_bytes())
+        with self.subTest(check="source template byte equality"):
+            if not (root / "src/grokbot_mcp").is_dir():
+                self.skipTest("Installed-wheel QA has no source tree; package resource checked above")
+            self.assertEqual((root / "routines/test-evidence.md").read_bytes(), packaged)
 
     def test_wizard_forwards_repeated_prefix_without_prompt(self):
         from grokbot_mcp import setup_wizard

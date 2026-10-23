@@ -52,13 +52,22 @@ def write_json(path: Path, value: dict) -> None:
     write_local(path, text)
 
 
+def _configure_console() -> None:
+    """Keep the console encoding; escape only characters it cannot represent."""
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(errors="backslashreplace")
+
+
 def yes(prompt: str) -> bool:
+    _configure_console()
     return input(prompt + " [y/N]: ").strip().lower() == "y"
 
 
 def register(registry: Path, workspace_id: str, *, mode: str = "create",
              git_gate: str = "strict", other_prefixes: list[str] | None = None) -> None:
     """Add one workspace, preserving all previously registered entries."""
+    _configure_console()
     safe_path(registry)
     if not re.fullmatch(r"[a-z0-9][a-z0-9-]{1,63}", workspace_id):
         raise ValueError("invalid_workspace_id")
@@ -204,6 +213,7 @@ def generate(registry: Path, workspace_id: str, mode: str = "reuse") -> Path:
 
 
 def check(registry: Path, workspace_id: str) -> bool:
+    _configure_console()
     report = diagnostics.collect(registry, workspace_id)
     print(diagnostics.render(report))
     return report["complete_for_purpose"]
@@ -292,8 +302,7 @@ def save_export(path: Path, report: dict, *, registry: Path) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    if hasattr(sys.stdout, "reconfigure"):
-        sys.stdout.reconfigure(encoding="utf-8")
+    _configure_console()
     parser = SafeParser(description="Local setup / 本地安装向导；不控制桌面，不发送 Webhook。")
     parser.add_argument("--registry", type=Path, default=default_registry_path())
     parser.add_argument("--workspace", help="Registered or new workspace ID / 工作区 ID")
