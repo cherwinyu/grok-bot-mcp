@@ -17,7 +17,7 @@ from grokbot_mcp.execution_profile import recommended as recommended_profile
 from grokbot_mcp.setup_environment import inspect_environment, interpreter
 from grokbot_mcp.credentials.backend import status_for
 from grokbot_mcp.registry import (
-    RegistryError, _workspace, default_registry_path, execution_switch_enabled,
+    MAX_TIMEOUT_SECONDS, RegistryError, _workspace, default_registry_path, execution_switch_enabled,
     load_registry, switch_path,
     routine_profile,
 )
@@ -111,7 +111,7 @@ def register(registry: Path, workspace_id: str, *, mode: str = "create",
         "allowed_files": allowed, "forbidden_files": forbidden, "protected_file": protected,
         "test_commands": [
             {"id": "none", "task_types": ["read_only"], "timeout_cap": 180, "default_timeout": 180},
-            {"id": command, "task_types": ["code_change"], "timeout_cap": 600, "default_timeout": 600},
+            {"id": command, "task_types": ["code_change"], "timeout_cap": MAX_TIMEOUT_SECONDS, "default_timeout": MAX_TIMEOUT_SECONDS},
         ],
         "validate_credential_target": f"grokbot-mcp/{workspace_id}/validate",
         "execute_credential_target": f"grokbot-mcp/{workspace_id}/execute",

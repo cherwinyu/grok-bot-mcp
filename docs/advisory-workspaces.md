@@ -17,6 +17,26 @@ An administrator reviews these workspace fields locally; this guide does not mod
 
 Registry paths, test commands and files must describe the actual administrator-reviewed project. Do not paste example configuration into a live registry without review. U1 normalization, encoding, safe error codes and the 4 MiB JSON limit are specified in [hardening](hardening.md).
 
+## Three timeout levels
+
+The bridge's global hard ceiling is 3600 seconds. Within it, the administrator
+registers each command's `timeout_cap` and `default_timeout`, with
+`1 <= default_timeout <= timeout_cap <= 3600`. Newly registered code-test commands
+in the setup wizard use 3600 for both; `none` / read-only commands remain at 180.
+Existing registrations are not upgraded automatically. These registered values
+participate in the policy fingerprint; changing them requires binding review.
+
+For one task, the Director can pass `grok_prepare_task(execution_timeout=N, ...)`,
+where N is a positive integer no greater than that command's `timeout_cap`.
+Omitting it uses `default_timeout`. This sets the whole remote task's deadline
+from its recorded request attempt, not just a test subprocess timeout. Local
+bridge reruns separately accept `timeout_seconds` from 1 through 3600, default 600.
+
+A `timeout` remains unresolved and keeps the workspace occupied against
+conflicting tasks. It does not authorize resending; a valid late result for the
+same claimed execution can still be verified. Grok's platform limit for a single
+run has not been verified; the bridge ceiling does not establish that limit.
+
 ## Restricted directory expansion
 
 `grok_prepare_task` adds optional `allowed_globs`, for example `["src/**/*.py", "docs/**"]`. Continue supplying `allowed_files` (use `[]` when all selection comes from globs), the test command ID and the existing required arguments. Only `dir/**` and `dir/**/*.ext` are accepted, with a literal directory prefix and extension. Absolute paths, drives, backslashes, traversal, empty/dot components, character classes, other wildcards and a second/misplaced `**` are refused.

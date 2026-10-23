@@ -40,7 +40,7 @@ _add("local_validation_policy_mismatch",
 
 _add("rerun_invalid rerun_argv_invalid rerun_env_invalid rerun_timeout_invalid",
      "The local rerun configuration is invalid. / 本机复跑配置不合法。",
-     "Review rerun: nonempty argv, uppercase environment keys and integer timeout 1–1800. Shells and embedded placeholders are refused. / 核查非空参数数组、大写环境变量名及 1–1800 秒整数超时；不接受 shell 或嵌入占位符。",
+     "Review rerun: nonempty argv, uppercase environment keys and integer timeout 1–3600. Shells and embedded placeholders are refused. / 核查非空参数数组、大写环境变量名及 1–3600 秒整数超时；不接受 shell 或嵌入占位符。",
      blocks="rerun")
 _add("rerun_cwd_invalid rerun_cwd_forbidden rerun_cwd_reparse rerun_cwd_missing",
      "The rerun working directory is unsafe or unavailable. / 复跑工作目录不安全或不可用。",
