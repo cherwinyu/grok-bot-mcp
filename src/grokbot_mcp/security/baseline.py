@@ -57,6 +57,14 @@ def _status_lists(stdout: str) -> tuple[list[str], list[str], list[str]]:
     return status_paths, ignored, untracked
 
 
+def _under_watched(name: str, watched: list[str]) -> bool:
+    for item in watched:
+        prefix = item.strip().replace("\\", "/").rstrip("/")
+        if prefix and (name == prefix or name.startswith(prefix + "/")):
+            return True
+    return False
+
+
 def capture_snapshot(
     root: Path,
     watched: list[str],
@@ -65,11 +73,7 @@ def capture_snapshot(
     include_ignored: bool = True,
 ) -> dict[str, object]:
     head = _run(root, ["rev-parse", "HEAD"], runner)
-    status_args = ["status", "--porcelain=v1"]
-    if include_ignored:
-        status_args.append("--ignored")
-    status_args.append("--untracked-files=all")
-    status = _run(root, status_args, runner)
+    status = _run(root, ["status", "--porcelain=v1", "--ignored", "--untracked-files=all"], runner)
     diff = _run(root, ["diff", "--name-only", "HEAD"], runner)
     if head.returncode != 0 or status.returncode != 0 or diff.returncode != 0:
         raise ValueError("git_status_failed")
@@ -78,6 +82,8 @@ def capture_snapshot(
         raise ValueError("git_status_failed")
     diff_files = [line.strip().replace("\\", "/") for line in (diff.stdout or "").splitlines() if line.strip()]
     status_paths, ignored, untracked = _status_lists(status.stdout or "")
+    if not include_ignored:
+        ignored = [name for name in ignored if _under_watched(name, watched)]
     hashes: dict[str, str | None] = {}
     for name in watched:
         hashes[name] = _hash_file(root / name)
@@ -152,8 +158,11 @@ def load_snapshot(directory: Path, execution_id: str, expected_sha256: object) -
 
 
 def same_snapshot(left: dict[str, object], right: dict[str, object]) -> bool:
-    keys = ("git_head_text", "diff_files", "untracked", "status_paths", "ignored", "file_hashes")
-    return all(left.get(key) == right.get(key) for key in keys)
+    keys = ("git_head_text", "diff_files", "untracked", "status_paths", "file_hashes")
+    return (
+        all(left.get(key) == right.get(key) for key in keys)
+        and (left.get("ignored") or []) == (right.get("ignored") or [])
+    )
 
 
 def execution_delta(baseline: dict[str, object], current: dict[str, object]) -> list[str]:
@@ -163,9 +172,12 @@ def execution_delta(baseline: dict[str, object], current: dict[str, object]) -> 
     for name in sorted(set(before) | set(after)):
         if before.get(name) != after.get(name):
             changed.append(name)
-    for key in ("diff_files", "untracked", "status_paths", "ignored"):
+    for key in ("diff_files", "untracked", "status_paths"):
         if key in baseline and key in current:
             for name in sorted(set(current.get(key) or []) - set(baseline.get(key) or [])):
                 if name not in changed:
                     changed.append(name)
+    for name in sorted(set(current.get("ignored") or []) - set(baseline.get("ignored") or [])):
+        if name not in changed:
+            changed.append(name)
     return changed

@@ -71,7 +71,22 @@ class AdvisorySnapshotSizeTest(unittest.TestCase):
             json.dumps(explicit, ensure_ascii=True, indent=2, sort_keys=True).encode("utf-8"),
         )
 
-    def test_missing_ignored_is_compatible_on_both_sides(self) -> None:
+    def test_advisory_keeps_new_ignored_file_under_watched_directory(self) -> None:
+        root = make_workspace(self.base)
+        (root / ".gitignore").write_text("private/*.tmp\n", encoding="utf-8")
+        (root / "private").mkdir()
+        git(root, "add", ".gitignore")
+        git(root, "commit", "-m", "ignore private fixtures")
+
+        baseline = capture_snapshot(root, ["private"], include_ignored=False)
+        (root / "private" / "secret.tmp").write_text("ignored\n", encoding="utf-8")
+        current = capture_snapshot(root, ["private"], include_ignored=False)
+
+        self.assertEqual(current["ignored"], ["private/secret.tmp"])
+        self.assertEqual(execution_delta(baseline, current), ["private/secret.tmp"])
+        self.assertFalse(same_snapshot(baseline, current))
+
+    def test_missing_ignored_is_compatible_with_empty_but_not_entries(self) -> None:
         snapshot = {
             "git_head_text": "a" * 40,
             "diff_files": [],
@@ -79,8 +94,12 @@ class AdvisorySnapshotSizeTest(unittest.TestCase):
             "status_paths": [],
             "file_hashes": {},
         }
-        self.assertTrue(same_snapshot(snapshot, dict(snapshot)))
-        self.assertEqual(execution_delta(snapshot, dict(snapshot)), [])
+        with_empty = {**snapshot, "ignored": []}
+        with_entry = {**snapshot, "ignored": ["private/secret.tmp"]}
+        self.assertTrue(same_snapshot(snapshot, with_empty))
+        self.assertFalse(same_snapshot(snapshot, with_entry))
+        self.assertEqual(execution_delta(snapshot, with_empty), [])
+        self.assertEqual(execution_delta(snapshot, with_entry), ["private/secret.tmp"])
 
 
 if __name__ == "__main__":
