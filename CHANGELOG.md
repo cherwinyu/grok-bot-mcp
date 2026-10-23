@@ -17,6 +17,14 @@
 - New manifests record `constraint_version`. Historical manifests that omit it remain verifiable. Verification does not require constraint-prose equality.
 - README and client docs add Cursor and Codex config shapes, path self-checks, and a PowerShell write-then-dispatch script that saves UTF-8 without a BOM.
 
+## 0.1.5b1 (experimental Beta)
+
+- Optional `prefix_ceiling` keeps the Routine policy fingerprint stable while active prefixes change within the ceiling. Manifests freeze active grants; claims expose their canonical SHA-256 and recheck the ceiling. Exact-file exceptions and forbidden/protected checks retain their existing semantics.
+- `registry-prefixes --add/--remove` previews by default; explicit `--apply` backs up the registry, atomically replaces it and appends `policy_changes.jsonl`. It never reads credentials or changes bindings.
+- Execution preparation reconciles arrived results through the existing status settlement path before rejecting concurrent execution. Read-only preflight reports stale execution IDs; unresolved records return the blocking execution ID.
+- Preflight and workspace listing expose runtime package/registry drift. Changed package bytes recommend a process restart without changing blocking reasons.
+- 可选前缀上限、manifest 冻结授权、claim 上限复核、带备份审计的前缀管理、执行自动对账及进程漂移提示；保持七个 MCP 接口和失败证据冻结规则。
+
 ## 0.1.4b1 (experimental Beta)
 
 - First standalone Public Beta candidate in a clean repository without the private development history.

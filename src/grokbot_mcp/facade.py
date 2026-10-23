@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from grokbot_mcp.tool_errors import guarded
 
-from grokbot_mcp.identity import runtime_identity
+from grokbot_mcp.identity import runtime_identity, runtime_drift
 from grokbot_mcp.execution_profile import report as environment_report
 
 from grokbot_mcp.credentials.backend import load_for, status_for
@@ -98,9 +98,11 @@ def list_workspaces() -> dict[str, object]:
             }
         if workspace.git_gate == "advisory":
             item["git_gate"] = "advisory"
-        if workspace.allowed_prefixes:
+        if workspace.allowed_prefixes or workspace.prefix_ceiling is not None:
             from grokbot_mcp.security.prefixes import prefix_json
             item["allowed_prefixes"] = prefix_json(workspace)
+            if workspace.prefix_ceiling is not None:
+                item["prefix_ceiling"] = prefix_json(workspace, ceiling=True)
         items.append(item)
     result = {
         "ok": True,
@@ -109,6 +111,8 @@ def list_workspaces() -> dict[str, object]:
         "webhook_sent": False,
         "execution_enabled": execution_switch_enabled(),
     }
+    result["runtime_drift"] = runtime_drift(registry=path)
+    result["warnings"] = ["process_restart_recommended"] if result["runtime_drift"]["package_changed"] else []
     return result
 
 
@@ -126,7 +130,7 @@ def preflight(workspace_id: str) -> dict[str, object]:
     enabled = execution_switch_enabled()
     local_error = git_error(git, workspace.git_gate)
     try:
-        if workspace.allowed_files or not workspace.allowed_prefixes:
+        if workspace.allowed_files or (not workspace.allowed_prefixes and workspace.prefix_ceiling is None):
             resolve_exact_files(workspace.root, list(workspace.allowed_files), workspace.forbidden_files)
     except TargetRejected as exc:
         local_error = exc.code
@@ -182,6 +186,14 @@ def preflight(workspace_id: str) -> dict[str, object]:
     }
     if workspace.git_gate == "advisory":
         result["git_gate"] = "advisory"
+    from grokbot_mcp.execution.service import stale_execution_records
+    result["stale_execution_records"] = stale_execution_records(workspace)
+    result["runtime_drift"] = runtime_drift()
+    result["warnings"] = ["process_restart_recommended"] if result["runtime_drift"]["package_changed"] else []
+    if workspace.prefix_ceiling is not None:
+        from grokbot_mcp.security.prefixes import prefix_json
+        result["prefix_ceiling"] = prefix_json(workspace, ceiling=True)
+        result["allowed_prefixes"] = prefix_json(workspace)
     # Optional local material summary; it never changes existing readiness keys.
     from grokbot_mcp.routine_check import check, packets
     from grokbot_mcp.local_safety import LocalError

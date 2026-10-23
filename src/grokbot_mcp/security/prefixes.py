@@ -50,8 +50,43 @@ def parse_prefixes(value: object) -> tuple[AllowedPrefix, ...]:
     return tuple(AllowedPrefix(p, tuple(sorted(exts))) for p, exts in sorted(merged.items()))
 
 
-def prefix_json(workspace) -> list[dict]:
-    return [{"prefix": p.prefix, "exts": list(p.exts)} for p in workspace.allowed_prefixes]
+def prefix_json(workspace, *, ceiling: bool = False) -> list[dict]:
+    prefixes = workspace.prefix_ceiling if ceiling else workspace.allowed_prefixes
+    return [{"prefix": p.prefix, "exts": list(p.exts)} for p in prefixes]
+
+
+def prefixes_within(active, ceiling) -> bool:
+    return all(any(p.prefix.startswith(c.prefix) and set(p.exts) <= set(c.exts)
+                   for c in ceiling) for p in active)
+
+
+def manifest_workspace(workspace, document: dict):
+    """Use only the frozen grant; current active prefixes cannot expand a task."""
+    from dataclasses import replace
+    from grokbot_mcp.manifest.store import ManifestError
+    ceiling = getattr(workspace, "prefix_ceiling", None)
+    if ceiling is None and "active_prefixes" not in document:
+        return workspace
+    try:
+        active = parse_prefixes(document.get("active_prefixes"))
+    except PathRejected as exc:
+        raise ManifestError("active_prefixes_outside_ceiling") from exc
+    if (ceiling is None
+            or not prefixes_within(active, ceiling)
+            or prefix_json(replace(workspace, allowed_prefixes=active)) != document["active_prefixes"]):
+        raise ManifestError("active_prefixes_outside_ceiling")
+    return replace(workspace, allowed_prefixes=active)
+
+
+def active_prefix_fields(workspace, document: dict) -> dict:
+    import hashlib
+    import json
+    frozen = manifest_workspace(workspace, document)
+    if getattr(workspace, "prefix_ceiling", None) is None:
+        return {}
+    active = prefix_json(frozen)
+    raw = json.dumps(active, ensure_ascii=True, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return {"active_prefixes": active, "active_prefixes_sha256": hashlib.sha256(raw).hexdigest()}
 
 
 def prefix_allows(workspace, name: str) -> bool:
@@ -133,6 +168,10 @@ def validate_create_files(workspace, values: object, *, check_disk: bool = True)
 
 def manifest_scope_valid(workspace, document: dict) -> bool:
     from grokbot_mcp.manifest.store import ManifestError
+    try:
+        workspace = manifest_workspace(workspace, document)
+    except ManifestError:
+        return False
     allowed = document.get("allowed_files")
     if not isinstance(allowed, list) or not all(isinstance(n, str) and policy_allows(workspace, n) for n in allowed):
         return False
@@ -154,6 +193,10 @@ def manifest_scope_valid(workspace, document: dict) -> bool:
 def resolve_task_files(workspace, document: dict) -> list[str]:
     from grokbot_mcp.manifest.store import ManifestError
     from grokbot_mcp.security.targets import resolve_exact_files, TargetRejected
+    try:
+        workspace = manifest_workspace(workspace, document)
+    except ManifestError as exc:
+        raise TargetRejected(exc.code) from exc
     allowed = document.get("allowed_files") or []
     creates = document.get("scope_expansion", {}).get("create_files")
     if creates is None:

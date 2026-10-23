@@ -57,6 +57,14 @@ _add("archive_cross_volume_unsupported", "The archive and workspace are on diffe
 _add("allowed_globs_disabled allowed_glob_invalid allowed_glob_unsafe_file allowed_glob_limit_exceeded allowed_glob_empty",
      "Restricted expansion was refused. / 受限目录展开已拒绝。",
      "Review allow_globs, glob_max_files and the explicit registry allow-list. / 核查 allow_globs、glob_max_files 与登记白名单。")
+_add("prefix_outside_ceiling", "Active prefixes exceed the registered ceiling. / 生效前缀超出登记上限。",
+     "Keep each prefix and its extensions within one ceiling entry. / 每项前缀及扩展名必须包含在同一上限条目内。")
+_add("active_prefixes_outside_ceiling", "The frozen manifest grant is missing, invalid or outside the current ceiling. / manifest 冻结授权缺失、无效或超出当前上限。",
+     "Review the original task and ceiling; do not rewrite frozen evidence or resend. / 核查原任务与上限；不要重写冻结证据或重发。")
+_add("process_restart_recommended", "Installed package bytes changed during this process. / 当前进程运行期间包文件已变更。",
+     "Restart the MCP process and verify runtime identity. / 重启 MCP 进程并核对运行身份。")
+_add("policy_audit_write_failed", "The registry update was applied but its audit append failed. / 注册表更新已应用，但审计追加失败。",
+     "Preserve the backup and inspect the registry and audit locally; do not assume rollback. / 保留备份并本地核查注册表和审计；不要假定已经回滚。")
 _add("create_file_outside_policy", "The prospective file is outside the registered prefix policy. / 新建文件不符合登记前缀策略。",
      "Review the exact task files, allowed_prefixes, extensions and protected paths. / 核查精确任务清单、前缀、扩展名及保护路径。")
 _add("routine_prefix_policy_mismatch", "The local Routine prefix policy or fingerprint is stale. / 本地 Routine 前缀集合或指纹不一致。",
@@ -349,7 +357,7 @@ def _collect(registry: Path, workspace_id: str, *, purpose="setup", export=False
             )
             problem = workspace_git_rejection(workspace.root) or git_error(git_report, workspace.git_gate)
         try:
-            if workspace.allowed_files or not workspace.allowed_prefixes:
+            if workspace.allowed_files or (not workspace.allowed_prefixes and workspace.prefix_ceiling is None):
                 resolve_exact_files(workspace.root, list(workspace.allowed_files), workspace.forbidden_files)
             resolve_exact_files(workspace.root, [workspace.protected_file], (".git", ".bridge"))
         except TargetRejected as exc:

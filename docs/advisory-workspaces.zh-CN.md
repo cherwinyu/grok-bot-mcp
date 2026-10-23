@@ -112,3 +112,47 @@ grokbot-mcp ledger-archive --registry $Registry --workspace $Workspace --task-id
 ## 已知限制
 
 越界读取不可检测；普通 gitignored 写入不进入 advisory Git 复核，登记的保护/禁止路径仍受监测。并行改动无法归因，需独立复核。远端结果 JSON 必须为 UTF-8，路径规范化且身份匹配；不要猜测修复乱码路径或替换冻结结果。测试 ID 是管理员映射，不是任意 shell 命令；`test_command_cli` 仅预览批准参数，不执行。本地一致性不能证明远端 Routine 文本、桌面连通性或模型行为。
+
+## 前缀上限
+
+可选 `prefix_ceiling` 与 `allowed_prefixes` 的格式和规范化规则相同，例如
+`[{"prefix":"docs/","exts":[".md",".txt"]}]`。每个生效前缀必须等于或位于某个上限
+前缀之下，扩展名集合必须是同一个上限条目的子集。越界报 `prefix_outside_ceiling`，
+且不会写入任何文件。精确 `allowed_files` 例外保持原语义；禁区和保护路径仍优先。
+有上限时允许空生效前缀集合，表示没有目录授权。
+
+有上限时，策略指纹和生成的 Routine profile 嵌入上限，生效前缀不进入指纹。
+修改上限、禁区或保护策略仍需更新并重粘 Routine、明确确认绑定；上限内扩缩不需重粘。
+没有上限时保留原有指纹和 Routine 策略正文行为，生成材料的版本标记随版本升级。
+
+准备任务时把当时生效的前缀冻结为 manifest 的 `active_prefixes`。claim 和结果核对都用
+该快照，不用 registry 最新生效值。claim 再检查「快照属于当前上限」，不满足时报
+`active_prefixes_outside_ceiling`，成功时返回 `active_prefixes` 和 `active_prefixes_sha256`。
+哈希为 UTF-8 JSON 的 SHA-256：键排序、ASCII 转义、紧凑逗号和冒号分隔。
+Routine 发现 claim 前缀超出其嵌入上限、或哈希不符时必须停止。收缩生效前缀只影响
+后续任务，不撤销已准备任务的冻结授权。
+
+扩展现有本地 `registry-prefixes` 命令，支持重复传入 `--add`、`--remove`。
+先移除再添加；添加已有前缀会合并扩展名。要替换扩展名集合，可在同一命令里先移除
+该前缀再添加。以下均为虚构路径，先预览，再明确应用同一操作：
+
+```powershell
+& $BridgePython -I -X utf8 -m grokbot_mcp.admin_cli registry-prefixes --registry 'C:\ExampleBridge\registry.json' --workspace example-workspace --add 'docs/:.md,.txt' --remove 'docs/old/'
+# 审查预览后，明确应用：
+& $BridgePython -I -X utf8 -m grokbot_mcp.admin_cli registry-prefixes --registry 'C:\ExampleBridge\registry.json' --workspace example-workspace --add 'docs/:.md,.txt' --remove 'docs/old/' --apply
+```
+
+不带 `--apply` 不写文件。应用时先按原字节备份为同目录的
+`registry.json.bak_<UTC时间戳>`，原子替换 registry，再追加同目录 `policy_changes.jsonl`。
+审计包含 UTC 时间、工作区、前后前缀集合和前后指纹；ceiling 模式下指纹相同。
+命令不读取凭据、不修改绑定或开关。审计日志是事后追溯手段，不是闸门；注册表替换与
+审计追加不是跨文件原子事务，进程中断可能使已应用操作缺少审计行。
+`policy_audit_write_failed` 且 `applied: true` 表示注册表已经提交。
+不带编辑参数时仍保留旧建议/副本模式；编辑参数不能与 `--write-to` 合用。这不是 OS 沙箱。
+
+预检与工作区列表展示上限和当前生效前缀。预检只读展示 `stale_execution_records`，不落盘。
+准备新执行时，已到结果通过普通状态查询的同一结算路径落盘；终态失败不再阻塞新任务。
+仍在途则返回 `concurrent_execution`、`blocking_execution_id` 与中英文提示；未知提交仍禁止重发。
+`runtime_drift` 比较启动时和当前的包、注册表哈希；包文件变化只在 `warnings` 中增加
+`process_restart_recommended`，不改变 `blocking_reasons`。安装更新后应重启 MCP 进程并核对身份；
+这些提示不授予执行权限，也不证明远端可达。

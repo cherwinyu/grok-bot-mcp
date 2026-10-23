@@ -121,3 +121,59 @@ An interrupted move leaves a workspace refusal barrier. Rerun the same `ledger-a
 ## Known limits
 
 Out-of-scope reads are undetectable; ordinary gitignored writes are not visible to advisory Git review. Registered protected/forbidden paths remain watched. Concurrent writes cannot be attributed to an agent. Review them independently. Remote result JSON must be UTF-8 with exact normalized paths and matching identity; do not guess how to repair corrupted path encoding or replace a frozen result. Test IDs are administrator mappings, not arbitrary shell commands; the `test_command_cli` helper previews approved arguments and does not execute them. Local consistency cannot prove remote Routine contents, desktop connectivity or model behavior.
+
+## Prefix ceiling
+
+Optional `prefix_ceiling` has the same syntax and normalization as
+`allowed_prefixes`, for example `[{"prefix":"docs/","exts":[".md",".txt"]}]`.
+Each active prefix must equal or descend from one ceiling entry, and its extension
+set must be a subset of that same entry. Invalid expansion returns
+`prefix_outside_ceiling` before any file is written. Exact `allowed_files`
+exceptions keep their existing semantics; forbidden and protected paths still win.
+An empty active list is allowed with a ceiling and grants no directory access.
+
+The ceiling replaces active prefixes in the policy fingerprint and generated Routine
+profile. Changing the ceiling or forbidden/protected policy still requires updating
+and repasting the Routine and confirming its binding. Within-ceiling expansion or
+contraction needs no repaste. Without a ceiling, policy hashing and Routine policy
+content retain their previous behavior (the generated release banner carries the new version).
+
+Task preparation freezes the current grant as manifest `active_prefixes`. Claim and
+result verification use this snapshot, not the latest registry active list. Claim
+checks the frozen grant against the current ceiling again, refusing with
+`active_prefixes_outside_ceiling` if invalid, and returns `active_prefixes` plus
+`active_prefixes_sha256`. The hash uses SHA-256 of UTF-8 JSON with sorted keys,
+ASCII escaping and compact comma/colon separators. A Routine must stop when claim
+prefixes exceed its embedded ceiling or their hash differs. Shrinking active
+prefixes affects future tasks; it does not revoke an already prepared grant.
+
+The existing local `registry-prefixes` command now supports repeated `--add` and
+`--remove`. Removal runs first; adding an existing prefix merges extensions. To
+replace its extension set, remove and then add that prefix in the same command.
+These fictional paths illustrate preview and explicit apply:
+
+```powershell
+& $BridgePython -I -X utf8 -m grokbot_mcp.admin_cli registry-prefixes --registry 'C:\ExampleBridge\registry.json' --workspace example-workspace --add 'docs/:.md,.txt' --remove 'docs/old/'
+# After reviewing the preview, explicitly apply the same operation:
+& $BridgePython -I -X utf8 -m grokbot_mcp.admin_cli registry-prefixes --registry 'C:\ExampleBridge\registry.json' --workspace example-workspace --add 'docs/:.md,.txt' --remove 'docs/old/' --apply
+```
+
+Without `--apply`, no files are written. Apply first saves the exact original bytes
+as `registry.json.bak_<UTC timestamp>`, atomically replaces the registry, and appends
+`policy_changes.jsonl` beside it. Audit records contain UTC time, workspace, old/new
+prefix sets and fingerprints; fingerprints match in ceiling mode. No credentials,
+bindings or switches are changed. Audit is retrospective traceability, not a gate;
+a crash between registry replacement and audit append can leave a missing event.
+`policy_audit_write_failed` with `applied: true` means the registry was committed.
+The old suggestion/copy mode remains available without edit flags; `--write-to`
+cannot be combined with edit flags. This is not an OS sandbox.
+
+Preflight and workspace listing expose the ceiling and current active prefixes.
+Preflight also reports `stale_execution_records` without writing the ledger. Before
+preparing a new execution, arrived results are settled by the ordinary status-query
+path. Terminal failures cease to block; unresolved records still return
+`concurrent_execution` with `blocking_execution_id`. Unknown submissions cannot
+be resent. `runtime_drift` compares startup/current package and registry hashes;
+changed package bytes add `process_restart_recommended` to `warnings`, not
+`blocking_reasons`. Restart the MCP process and check its identity after installation
+changes; these hints do not authorize execution or establish remote reachability.
