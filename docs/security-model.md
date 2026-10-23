@@ -99,3 +99,29 @@ The bridge never enables on-demand billing and never changes a subscription. `qu
 ## Directory authorization
 
 Optional `allowed_prefixes` authorizes literal directory/extension sets; each task and claim still carries an exact file list. Prospective `create_files` cannot override forbidden/protected policy, and `.git`/`.bridge` segments are permanently excluded. Administrators remain responsible for `.cursor`, `AGENTS.md` and private-path exclusions. Existing parents are checked for symlinks, junctions and reparse points, but these application-level checks are not an OS sandbox or protection from concurrent filesystem replacement. Prefix snapshots omit ordinary ignored cache trees; explicit watched protections remain. Newly observed unreported out-of-task additions use the advisory report (strict refuses); agent-reported new out-of-task files are refused. No permission preview, migration copy or prefix grant authorizes a send or retry.
+
+## Supplemental bridge test evidence
+
+Only an explicit registered local rerun can supplement `test_evidence_missing`.
+Identity, claims, frozen policy, scope, changed files, Git review and all remaining
+success conditions are rechecked before launch. The original result must claim
+success with zero failed tests and exit code zero; no other rejected result can
+use this path. Existing WP2 diagnostic comparisons remain separate.
+
+Receipts use the registered argv/timeout and `shell=False`, append without replacing
+another run, and bind the original result hash, frozen ledger content and measured
+workspace snapshot. Supplemental calls serialize and reuse the first receipt;
+a failed supplemental run cannot be replaced by a later passing run. Post-run
+source or workspace drift refuses success. No automatic test process is launched
+by ordinary status queries or integrity checks.
+
+`succeeded_bridge_evidence` explicitly carries `evidence_source: "bridge_rerun"`.
+It records a new local measurement, not Grok's historical behavior. The original
+result and frozen ledger, including the failure's historical status, stay intact.
+`qa_accepted` remains false; this is neither independent model attestation nor an
+OS sandbox. Local writers with equivalent filesystem rights can still tamper with
+receipts, just as with other local evidence. No receipt authorizes resend.
+
+桥补证据只记录本机复跑的测量，不替换 Grok 原始结果或冻结失败账本；
+成功状态明确标注来源为桥，`qa_accepted` 仍为 false。身份、范围、Git 核验及
+其余成功条件继续失败即拒绝，普通查询不运行测试，失败补证据不可覆盖重试。

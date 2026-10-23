@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.1.5b3
+
+- Explicit registered reruns can supplement an otherwise valid execution frozen
+  as `test_evidence_missing`. Append-only bridge receipts report
+  `succeeded_bridge_evidence` or `failed_bridge_evidence`, with
+  `evidence_source: bridge_rerun`; the original result and ledger stay frozen and
+  `qa_accepted` stays false. Supplemental attempts are idempotent.
+- Put required output fields and honest `not_run` instructions directly in the
+  generated Execute body when `require_test_output` is true. Policy fingerprints
+  and disabled/default Routine content are unchanged apart from version banners.
+- 补充证据来自桥本机复跑，不证明 Grok 的历史测试行为；不改变原始失败证据，
+  不授权重发、真实配置修改或发布。
+
 ## 0.1.5b2
 
 - Add advisory-only opt-in local validation, using shared manifest policy checks,

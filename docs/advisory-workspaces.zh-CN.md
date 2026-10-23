@@ -182,3 +182,33 @@ claim 和执行核对要求当前仍启用本地校验且指纹一致，否则�
 完整且通过校验的结果立即返回，并附 `waited_ms`。等待后按原选项执行一次普通查询。
 `observe_only` 全程只读；与 `rerun_tests` 合用时先等待，再结算查询，仅终态执行本机复跑。
 `rerun_tests` 与 `observe_only` 仍不能合用。
+
+## 缺失测试输出与桥复跑补证据
+
+执行被冻结为 `test_evidence_missing` 时，只有显式调用
+`grok_get_status(rerun_tests=True)` 才可能运行该任务登记的 `rerun` 命令。
+桥重新核验身份、claim、策略、范围、changed_files 和 git_review，并继续检查原来
+缺输出检查之后的全部成功条件。Grok 原结果必须为成功、失败数为零、退出码为零。
+未登记 rerun 时仍保持缺证据状态。其他拒绝不能借此转为补证据成功；WP2 已有的
+诊断复跑规则不变，包括对已结算测试失败的诊断比较。
+
+复跑沿用 argv 白名单、`shell=False`、超时和
+`.bridge/bridge_test_runs/<execution_id>.<序号>.json` 追加收据机制。
+通过且退出码一致时，返回 `succeeded_bridge_evidence`，并标注
+`evidence_source: "bridge_rerun"`；不一致、超时或工作区漂移记为
+`failed_bridge_evidence`。同一补证据执行复用第一份收据，失败收据也不会被覆盖或
+再次运行。普通查询、`observe_only`、`verify_current` 不会启动测试命令。
+
+原 `.bridge/results_execute/<id>.json` 和冻结执行账本均不改写，
+`historical_status` 仍为 `test_evidence_missing`。新结算是桥在本机观察到的证据，
+不证明 Grok 曾产生输出或曾运行历史测试。`reported_success` 保持原决策，
+`qa_accepted` 恒为 false。`verify_current` 核验补证据快照；普通查询仅呈现历史证据。
+仍需人工审查，不允许重发或创建替代身份。
+
+开启 `require_test_output` 后，生成的 Execute 正文直接列出 `tests.output`、
+`tests.output_sha256`、`tests.output_bytes`，说明使用
+`grokbot_mcp.result_contract.output_evidence` 构造，以及未运行时诚实填写
+`not_run=true` 的失败方式。需人工重新粘贴 **Execute** Routine；本次变化不要求
+修改 Validate 正文，也不会自动修改真实 Routine。模板文本不参与
+`policy_fingerprint`；绑定核验策略和能力而非正文哈希，因此模板修正不改变指纹。
+false/省略时，在相同版本横幅下字节保持一致；升级到 0.1.5b3 会更新生成材料的版本横幅。

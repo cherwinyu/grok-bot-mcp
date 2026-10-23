@@ -39,7 +39,7 @@ Replace `C:\ExamplePython\python.exe` and `example-workspace` with your install 
    - `changed_files`: the repo-relative files you changed, which must match the later snapshot
    - `code_modified`: true when you changed a file
    - `cursor_cloud_agent_used`: false
-   - `tests.command_id`, `tests.passed`, `tests.failed`, `tests.exit_code`
+   - `tests.command_id`, `tests.passed`, `tests.failed`, `tests.exit_code`{{REQUIRED_TEST_OUTPUT}}
    - Counts must be real non-negative integers, never booleans or strings; exit status must be an integer.
    - Optional `tests.unit`, `tests.case_count` and `tests.assertion_count` distinguish cases from assertions.
    - Before-test code failure: `status: failed`, `tests.command_id`, `tests.not_run: true`; omit unmeasured counts and exit code.

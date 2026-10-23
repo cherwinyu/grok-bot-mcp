@@ -212,3 +212,38 @@ the response adds `waited_ms`. After polling, one normal query uses the original
 options. `observe_only` remains read-only. With `rerun_tests`, waiting comes first,
 then a normal reconciliation and a local rerun only for a terminal execution;
 `rerun_tests` still cannot be combined with `observe_only`.
+
+## Missing test output and bridge reruns
+
+For an execution frozen as `test_evidence_missing`, an explicit
+`grok_get_status(rerun_tests=True)` may run the task's registered `rerun` command.
+The bridge rechecks identity, claim, policy, scope, changed files and Git review,
+including success conditions after the original missing-output check. The Grok
+result must report success, zero failures and exit code zero. No registered rerun
+means the missing-evidence state remains. Other rejected evidence cannot use
+this supplemental-success path; existing WP2 diagnostic reruns retain their rules.
+
+The command still uses registered argv, `shell=False`, the configured timeout and
+append-only `.bridge/bridge_test_runs/<execution_id>.<sequence>.json` receipts.
+A passing, agreeing run produces `succeeded_bridge_evidence` with
+`evidence_source: "bridge_rerun"`; disagreement, timeout or workspace drift produces
+`failed_bridge_evidence`. Repeated supplemental calls reuse the first receipt,
+including a failed receipt. They neither replace it nor rerun the task. Ordinary
+queries, `observe_only` and `verify_current` never launch test commands.
+
+The original `.bridge/results_execute/<id>.json` and frozen execution ledger are
+unchanged. `historical_status` remains `test_evidence_missing`; the new settlement
+is a separate bridge observation, not proof that Grok produced output or ran the
+historical test. `reported_success` retains the original decision and
+`qa_accepted` remains false. `verify_current` checks the supplemental snapshot;
+ordinary observation only reports historical evidence. Human review is required.
+
+With `require_test_output: true`, newly generated Execute bodies include
+`tests.output`, `tests.output_sha256`, `tests.output_bytes`, the
+`grokbot_mcp.result_contract.output_evidence` construction method and honest
+`not_run=true` failure instructions. Re-paste the generated **Execute** Routine
+to obtain these instructions; Validate needs no content update for this change.
+No actual Routine is edited by this source update. This template correction does
+not change `policy_fingerprint`: bindings check policy and capabilities, not a
+hash of Routine prose. Default/false bodies keep their bytes under the same
+version banner; upgrading to 0.1.5b3 changes the generated version banner.
