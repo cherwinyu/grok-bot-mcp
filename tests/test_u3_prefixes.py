@@ -128,8 +128,9 @@ class CreateFilesTest(unittest.TestCase):
         for name in ("docs/locked.md", "DOCS/locked.md", "docs/.cursor/rule.md", "docs/AGENTS.md"):
             with self.subTest(name=name), self.assertRaises(ManifestError):
                 validate_create_files(ws, [name], check_disk=False)
-        self.assertEqual(validate_create_files(workspace(), ["docs/.cursor/rule.md", "docs/AGENTS.md"], check_disk=False),
-                         ["docs/.cursor/rule.md", "docs/AGENTS.md"])
+        for name in ("docs/.cursor/rule.md", "docs/AGENTS.md"):
+            with self.subTest(name=name), self.assertRaisesRegex(ManifestError, "create_file_outside_policy"):
+                validate_create_files(workspace(), [name], check_disk=False)
 
     def test_limits_reject_whole_request_and_union(self):
         ws = replace(workspace(), glob_max_files=1)
