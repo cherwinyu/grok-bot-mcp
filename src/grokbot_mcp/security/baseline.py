@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import posixpath
 import subprocess
 from pathlib import Path
 
@@ -33,13 +34,50 @@ def _skipped(name: str) -> bool:
     return name in _SKIP_EXACT or name.startswith(_SKIP_PREFIXES)
 
 
-def _status_lists(stdout: str) -> tuple[list[str], list[str], list[str]]:
+def _decode_git_path(value: str) -> str:
+    if len(value) < 2 or value[0] != '"' or value[-1] != '"':
+        return value
+    escapes = {
+        "a": "\a", "b": "\b", "t": "\t", "n": "\n",
+        "v": "\v", "f": "\f", "r": "\r", '"': '"', "\\": "\\",
+    }
+    decoded: list[str] = []
+    index = 1
+    while index < len(value) - 1:
+        character = value[index]
+        if character != "\\":
+            decoded.append(character)
+            index += 1
+            continue
+        index += 1
+        if index >= len(value) - 1:
+            decoded.append("\\")
+            break
+        character = value[index]
+        if character in "01234567":
+            end = index + 1
+            while end < min(index + 3, len(value) - 1) and value[end] in "01234567":
+                end += 1
+            decoded.append(chr(int(value[index:end], 8)))
+            index = end
+            continue
+        decoded.append(escapes.get(character, character))
+        index += 1
+    return "".join(decoded)
+
+
+def _status_lists(
+    stdout: str, *, decode_ignored: bool = False,
+) -> tuple[list[str], list[str], list[str]]:
     status_paths: list[str] = []
     ignored: list[str] = []
     untracked: list[str] = []
     for line in stdout.splitlines():
         if line.startswith("!! "):
-            name = line[3:].strip().replace("\\", "/").rstrip("/")
+            name = line[3:].strip()
+            if decode_ignored:
+                name = _decode_git_path(name)
+            name = name.replace("\\", "/").rstrip("/")
             if name and not _skipped(name):
                 ignored.append(name)
             continue
@@ -57,10 +95,21 @@ def _status_lists(stdout: str) -> tuple[list[str], list[str], list[str]]:
     return status_paths, ignored, untracked
 
 
+def _normalized_match_path(value: str) -> str:
+    normalized = value.strip().replace("\\", "/")
+    while normalized.startswith("./"):
+        normalized = normalized[2:]
+    normalized = posixpath.normpath(normalized)
+    return "" if normalized == "." else normalized.casefold().rstrip("/")
+
+
 def _under_watched(name: str, watched: list[str]) -> bool:
+    normalized_name = _normalized_match_path(name)
     for item in watched:
-        prefix = item.strip().replace("\\", "/").rstrip("/")
-        if prefix and (name == prefix or name.startswith(prefix + "/")):
+        prefix = _normalized_match_path(item)
+        if prefix and (
+            normalized_name == prefix or normalized_name.startswith(prefix + "/")
+        ):
             return True
     return False
 
@@ -81,7 +130,9 @@ def capture_snapshot(
     if not head_text:
         raise ValueError("git_status_failed")
     diff_files = [line.strip().replace("\\", "/") for line in (diff.stdout or "").splitlines() if line.strip()]
-    status_paths, ignored, untracked = _status_lists(status.stdout or "")
+    status_paths, ignored, untracked = _status_lists(
+        status.stdout or "", decode_ignored=not include_ignored,
+    )
     if not include_ignored:
         ignored = [name for name in ignored if _under_watched(name, watched)]
     hashes: dict[str, str | None] = {}

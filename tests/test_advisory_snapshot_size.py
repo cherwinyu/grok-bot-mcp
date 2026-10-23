@@ -86,6 +86,21 @@ class AdvisorySnapshotSizeTest(unittest.TestCase):
         self.assertEqual(execution_delta(baseline, current), ["private/secret.tmp"])
         self.assertFalse(same_snapshot(baseline, current))
 
+    def test_advisory_normalizes_quoted_ignored_paths_for_matching(self) -> None:
+        root = make_workspace(self.base)
+        (root / ".gitignore").write_text("*.tmp\n", encoding="utf-8")
+        (root / "scope").mkdir()
+        (root / "Private").mkdir()
+        (root / "private2").mkdir()
+        (root / "Private" / "a b.tmp").write_text("watched\n", encoding="utf-8")
+        (root / "private2" / "a b.tmp").write_text("unrelated\n", encoding="utf-8")
+
+        snapshot = capture_snapshot(
+            root, [r".\scope\..\private"], include_ignored=False,
+        )
+
+        self.assertEqual(snapshot["ignored"], ["Private/a b.tmp"])
+
     def test_missing_ignored_is_compatible_with_empty_but_not_entries(self) -> None:
         snapshot = {
             "git_head_text": "a" * 40,
