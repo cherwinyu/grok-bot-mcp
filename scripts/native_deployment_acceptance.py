@@ -11,12 +11,12 @@ import hashlib
 import json
 import os
 from pathlib import Path
+
 import platform
 import shutil
 import subprocess
 import sys
 import tempfile
-import tomllib
 import venv
 
 
@@ -297,11 +297,19 @@ def main():
         parser.error("native Windows required; no substituted acceptance")
     if args.worker:
         return worker(args)
+    # The isolated worker copy has no source tree or version helper.
+    if __package__:
+        from .source_version import source_version
+    else:
+        try:
+            from source_version import source_version
+        except ModuleNotFoundError:
+            from scripts.source_version import source_version
     root = Path(__file__).resolve().parents[1]
     wheelhouse = args.wheelhouse.resolve()
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=True)
-    version = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))["project"]["version"]
+    version = source_version(root)
     wheel = next(wheelhouse.glob("grokbot_mcp_bridge-"+version+"-*.whl"))
     with tempfile.TemporaryDirectory(prefix="bridge-native-") as name:
         base = Path(name)

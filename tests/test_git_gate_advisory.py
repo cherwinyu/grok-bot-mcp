@@ -4,9 +4,10 @@ from __future__ import annotations
 import json
 import hashlib
 import os
-import tempfile
 import unittest
 from pathlib import Path
+
+from tests.support import temporary_directory
 from unittest.mock import patch
 
 from grokbot_mcp import facade, setup_wizard
@@ -19,7 +20,7 @@ from tests.support import (
 
 class GitGateAdvisoryTest(unittest.TestCase):
     def setUp(self) -> None:
-        self.temp = tempfile.TemporaryDirectory()
+        self.temp = temporary_directory()
         self.addCleanup(self.temp.cleanup)
         self.base = Path(self.temp.name)
         self.root = make_advisory_workspace(self.base, extra_forbidden=("private",))
@@ -76,7 +77,7 @@ class GitGateAdvisoryTest(unittest.TestCase):
                     load_registry(self.registry)
 
     def test_strict_registry_roundtrip_policy_and_baseline_are_byte_compatible(self) -> None:
-        with tempfile.TemporaryDirectory() as name:
+        with temporary_directory() as name:
             root = make_workspace(Path(name))
             registry = Path(name) / "registry.json"
             raw = registry.read_bytes()
@@ -102,7 +103,7 @@ class GitGateAdvisoryTest(unittest.TestCase):
             self.assertEqual(git(root, "rev-parse", "HEAD"), baseline)
 
     def test_advisory_registration_uses_flag_without_new_prompt(self) -> None:
-        with tempfile.TemporaryDirectory() as name:
+        with temporary_directory() as name:
             root = make_workspace(Path(name))
             registry = Path(name) / "advisory" / "registry.json"
             answers = [

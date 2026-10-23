@@ -5,12 +5,13 @@ import io
 import json
 import os
 import subprocess
-import tempfile
 import unittest
 from contextlib import redirect_stdout
 from dataclasses import replace
 from importlib.resources import files
 from pathlib import Path
+
+from tests.support import temporary_directory
 from unittest.mock import Mock, patch
 
 from grokbot_mcp import admin_cli, facade, registry_prefixes
@@ -128,8 +129,9 @@ class CreateFilesTest(unittest.TestCase):
         for name in ("docs/locked.md", "DOCS/locked.md", "docs/.cursor/rule.md", "docs/AGENTS.md"):
             with self.subTest(name=name), self.assertRaises(ManifestError):
                 validate_create_files(ws, [name], check_disk=False)
-        self.assertEqual(validate_create_files(workspace(), ["docs/.cursor/rule.md", "docs/AGENTS.md"], check_disk=False),
-                         ["docs/.cursor/rule.md", "docs/AGENTS.md"])
+        for name in ("docs/.cursor/rule.md", "docs/AGENTS.md"):
+            with self.subTest(name=name), self.assertRaisesRegex(ManifestError, "create_file_outside_policy"):
+                validate_create_files(workspace(), [name], check_disk=False)
 
     def test_limits_reject_whole_request_and_union(self):
         ws = replace(workspace(), glob_max_files=1)
@@ -413,7 +415,7 @@ class NativePrefixTest(unittest.TestCase):
         self.addCleanup(self.restore_environment)
         self.addCleanup(install_backend, None, None)
         self.addCleanup(facade.install_transport, None)
-        self.temp = tempfile.TemporaryDirectory(prefix="u3-fictional-")
+        self.temp = temporary_directory(prefix="u3-fictional-")
         self.addCleanup(self.temp.cleanup)
         self.base = Path(self.temp.name)
         self.root = make_workspace(self.base)

@@ -4,8 +4,9 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+
+from tests.support import temporary_directory
 import sys
-import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -16,7 +17,7 @@ from grokbot_mcp.local_safety import LocalError
 @unittest.skipUnless(sys.platform == "win32", "Native Windows fixture required")
 class CanaryMachineIdentityTest(unittest.TestCase):
     def setUp(self):
-        self.temp = tempfile.TemporaryDirectory()
+        self.temp = temporary_directory()
         self.addCleanup(self.temp.cleanup)
         self.folder = Path(self.temp.name) / "FICTIONAL-canary"
 

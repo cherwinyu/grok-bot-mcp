@@ -17,3 +17,24 @@ Advisory 快照解码 Git C 风格引号路径，将八进制转义先累积为�
 验收仍要求原生 Windows 测试、源码树外 installed-wheel 导入、虚构双安装验收、离线演示及发布扫描。环境或权限失败不能算作通过；验收通过也不授权发布或部署。
 
 目录授权 `allowed_prefixes` 与精确 `create_files` 在规范化前执行更严格的字面量路径检查，并检查已有组件的 reparse/硬链接。前缀快照使用 Git 索引及未忽略候选，不遍历忽略目录。缺省空集合保留旧策略和结果字节，详见[目录级授权](advisory-workspaces.zh-CN.md#目录级授权)。
+
+## PR9 后续边界
+
+前缀派生授权现内置排除 `.git`、`.bridge`、`.cursor` 和 `AGENTS.md`，使用共享策略
+规范化，按完整路径段、不区分大小写比较。适用于 `create_files`、通过前缀选择的
+已有文件，以及前缀派生的 `allowed_globs` 匹配。仅由前缀发现的快照候选也排除这些
+路径；显式 watched 文件及 forbidden/protected 监测保留。registry 中已有的精确
+`allowed_files` 例外保留原行为，包括既有禁区检查。登记解析和策略指纹输入不变。
+此前建议配置 `.cursor`、`AGENTS.md` 禁区，对精确文件策略和监测仍有作用；
+派生授权现已不再依赖调用方配置这两项排除。
+
+硬链接错误码有意保持区别：前缀快照发现已有文件有多个链接时返回 `reparse`，
+与链接或重解析组件共用该码；`create_files` 的预期路径检查和精确已有文件解析，
+在叶子文件为硬链接时返回 `target_hardlink_rejected`。Glob 展开将不安全文件检查
+包装为 `allowed_glob_unsafe_file`。这些情况均拒绝操作；错误码不授权修复冻结证据或重发。
+
+`protected_or_forbidden_changed` 可能指向含 `.git` 的嵌套仓库根：外层 Git status
+可能把未跟踪仓库目录或已跟踪 gitlink 的变化报告为单个条目。拒绝行为保留。
+本地诊断提供条件式说明，不自动判定文件系统中的仓库类型：由管理员审查将嵌套目录
+从外层仓库改动中排除或另行管理，同时保留禁区保护。忽略规则不能隐藏已跟踪的
+gitlink，受监测的 ignored 路径也仍可能被拒绝。不要为了通过检查而移除 forbidden 策略。

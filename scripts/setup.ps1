@@ -82,7 +82,30 @@ try {
     } else {
         Write-Host 'Existing bridge installation preserved. No pip upgrade or replacement.'
     }
-    & $venvPython -I -c "import importlib.metadata as m,sys,tomllib; wanted=tomllib.load(open(sys.argv[1],'rb'))['project']['version']; sys.exit(0 if m.version('grokbot-mcp-bridge') == wanted else 1)" (Join-Path $source 'pyproject.toml')
+    $versionCheck = @'
+import importlib.metadata as m
+import pathlib
+import runpy
+import sys
+import tomllib
+try:
+    root = pathlib.Path(sys.argv[1])
+    helper = root / 'scripts/source_version.py'
+    if helper.is_file():
+        wanted = runpy.run_path(str(helper))['source_version'](root)
+    else:
+        # Older standalone setup copies carry a static project version.
+        wanted = tomllib.loads((root / 'pyproject.toml').read_text(encoding='utf-8'))['project']['version']
+    installed = m.version('grokbot-mcp-bridge')
+except (OSError, ValueError, SyntaxError, KeyError, m.PackageNotFoundError):
+    sys.exit(2)
+sys.exit(0 if installed == wanted else 1)
+'@
+    & $venvPython -I -B -X utf8 -c $versionCheck $source
+    if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne 1) {
+        Write-Host 'installation_unavailable: Could not read the candidate or installed package version. No installation was changed.'
+        exit 1
+    }
     if ($LASTEXITCODE) {
         Write-Host 'installation_mismatch: This venv does not contain the checked-out candidate version. Select a NEW -InstallDir; the existing installation was not upgraded.'
         exit 1
