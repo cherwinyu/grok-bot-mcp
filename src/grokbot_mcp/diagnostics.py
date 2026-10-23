@@ -24,6 +24,12 @@ def _add(codes, reason, next_step, where="local", blocks="setup submit"):
                          "where": where, "blocks": blocks.split()}
 
 
+_add("succeeded_bridge_evidence",
+     "Registered bridge rerun supplied missing test output; Grok evidence remains frozen. / 登记的桥复跑补足测试输出；Grok 原证据保持冻结。",
+     "Review the separate bridge receipt; human QA is still required. / 审查独立桥收据，仍需人工 QA。", blocks="")
+_add("failed_bridge_evidence rerun_evidence_failed",
+     "Supplemental bridge tests failed or disagreed with Grok's exit status. / 桥补充测试失败或与 Grok 退出码不一致。",
+     "Preserve both receipts; do not overwrite evidence or resend. / 保留两份收据；不要覆盖证据或重发。", blocks="rerun")
 _add("local_validation_invalid",
      "Local validation requires a boolean and the advisory Git gate. / 本地校验必须是布尔值且仅支持 advisory。",
      "Review the declared registry policy locally; do not enable real switches. / 本地核查登记策略，不开启真实执行开关。")

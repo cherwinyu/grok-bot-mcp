@@ -350,6 +350,10 @@ def get_status(workspace_id: str, task_id: str = "", execution_id: str = "", *,
     if rerun_tests and (not wait_seconds or payload.get("execution", {}).get("status") in TERMINAL):
         from grokbot_mcp.bridge_tests import compact, rerun
         payload["bridge_tests"] = compact(rerun(workspace, execution_id))
+    if execution_id and payload["execution"].get("status") == "test_evidence_missing":
+        from grokbot_mcp.bridge_tests import supplement_status
+        payload["execution"] = supplement_status(workspace, execution_id, payload["execution"],
+                                                 verify_current=verify_current)
     if waited_ms is not None:
         payload["waited_ms"] = waited_ms
     return payload

@@ -538,7 +538,13 @@ def _interpret(
     result: dict[str, object],
     parsed: dict[str, object],
     result_sha256: str,
+    *,
+    defer_test_output: bool = False,
 ) -> dict[str, object]:
+    if defer_test_output:
+        from grokbot_mcp.observation import LedgerView
+        if not isinstance(store, LedgerView) or store.persist:
+            raise ValueError("rerun_result_unverified")
     execution_id = str(record["execution_id"])
     task_id = str(record["manifest_task_id"])
     result["result_diagnosis"] = diagnosis(parsed, "execute", expected=result_identity(workspace, "execute", record),
@@ -621,7 +627,7 @@ def _interpret(
     command = document.get("test_command_id") if isinstance(document, dict) else None
     if not isinstance(tests, dict) or tests.get("command_id") != command:
         return _fail(store, execution_id, result, "illegal_test_command", result_sha256)
-    if issue["category"] == "test_evidence_missing":
+    if issue["category"] == "test_evidence_missing" and not defer_test_output:
         return _fail(store, execution_id, result, "test_evidence_missing", result_sha256)
     from grokbot_mcp.test_commands import enhanced_tests
     enhanced = enhanced_tests(workspace, workspace.command(command))

@@ -28,6 +28,17 @@ def render_routine(phase: str, *, workspace_root: Path, workspace_id: str,
                         "Use the administrator's registered test-command mapping; do not infer a command from this template.")
     writing = package.joinpath("result-writing.md").read_text(encoding="utf-8")
     options = test_options or {}
+    required_output = ""
+    if phase == "execute" and options.get("require_test_output") is True:
+        required_output = ("\n   - Required `tests.output={\"head\",\"tail\",\"truncated\"}`, `tests.output_sha256`, "
+                           "and `tests.output_bytes`: capture the complete UTF-8 test output bytes and merge "
+                           "`grokbot_mcp.result_contract.output_evidence(raw)` into `tests`. The helper bounds "
+                           "head/tail and hashes/counts the full stream, not just the excerpt.\n"
+                           "   - If tests could not run, honestly report `status: failed` and `tests.not_run: true` "
+                           "(`not_run=true`), with the registered command_id; omit unmeasured counts, exit code "
+                           "and output. Never invent output or claim success.\n")
+    text = text.replace("{{REQUIRED_TEST_OUTPUT}}", required_output)
+    writing = writing.replace("{{REQUIRED_TEST_OUTPUT}}", required_output)
     if options.get("allowed_prefixes") or "prefix_ceiling" in options:
         text = text.replace("Stop if the manifest allow-list is not a subset.",
                             "Check the exact task list against the local registry's file/prefix policy; stop on mismatch.")

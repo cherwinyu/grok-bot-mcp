@@ -5,7 +5,8 @@ import time
 
 TERMINAL = frozenset({"succeeded", "failed", "cancelled", "timeout", "identity_mismatch",
                       "hash_mismatch", "scope_violation", "unknown_submission", "result_inconsistent",
-                      "external_agent_rejected", "rejected", "archived"})
+                      "external_agent_rejected", "rejected", "archived", "test_evidence_missing",
+                      "succeeded_bridge_evidence", "failed_bridge_evidence"})
 
 
 def wait_for_status(probe, seconds, *, clock=None, sleep=None):
