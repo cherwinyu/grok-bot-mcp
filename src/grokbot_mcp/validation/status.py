@@ -54,7 +54,11 @@ def observe_validation(workspace, task_id: str, *, observe_only=False, verify_cu
                     _, actual = load_manifest(workspace.root, task_id)
                     if actual != record.get("manifest_sha256"):
                         raise ValueError("hash_mismatch")
-                    current = capture_snapshot(workspace.root, list(workspace.allowed_files) + list(workspace.forbidden_files))
+                    current = capture_snapshot(
+                        workspace.root,
+                        list(workspace.allowed_files) + list(workspace.forbidden_files),
+                        include_ignored=workspace.git_gate != "advisory",
+                    )
                     if not same_snapshot(record.get("verified_snapshot") or {}, current):
                         raise ValueError("workspace_changed_since_verification")
                     result["current_integrity"] = True
@@ -81,7 +85,11 @@ def observe_validation(workspace, task_id: str, *, observe_only=False, verify_cu
             summary = {key: result.get(key) for key in ("validation_passed", "validation_errors", "code_modified",
                         "manifest_sha256", "workspace_id", "allowed_files", "error", "result_diagnosis")}
             try:
-                snapshot = capture_snapshot(workspace.root, list(workspace.allowed_files) + list(workspace.forbidden_files))
+                snapshot = capture_snapshot(
+                    workspace.root,
+                    list(workspace.allowed_files) + list(workspace.forbidden_files),
+                    include_ignored=workspace.git_gate != "advisory",
+                )
             except (OSError, ValueError):
                 snapshot = None
                 result.update(status="failed", error="snapshot_unavailable", reported_success=False)

@@ -57,9 +57,19 @@ def _status_lists(stdout: str) -> tuple[list[str], list[str], list[str]]:
     return status_paths, ignored, untracked
 
 
-def capture_snapshot(root: Path, watched: list[str], runner=subprocess.run) -> dict[str, object]:
+def capture_snapshot(
+    root: Path,
+    watched: list[str],
+    runner=subprocess.run,
+    *,
+    include_ignored: bool = True,
+) -> dict[str, object]:
     head = _run(root, ["rev-parse", "HEAD"], runner)
-    status = _run(root, ["status", "--porcelain=v1", "--ignored", "--untracked-files=all"], runner)
+    status_args = ["status", "--porcelain=v1"]
+    if include_ignored:
+        status_args.append("--ignored")
+    status_args.append("--untracked-files=all")
+    status = _run(root, status_args, runner)
     diff = _run(root, ["diff", "--name-only", "HEAD"], runner)
     if head.returncode != 0 or status.returncode != 0 or diff.returncode != 0:
         raise ValueError("git_status_failed")

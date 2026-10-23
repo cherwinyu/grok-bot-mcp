@@ -220,7 +220,9 @@ def prepare_execution(workspace: Workspace, task_id: str, sibling_roots: list[Pa
         assert isinstance(document, dict)
         watched = list(workspace.allowed_files) + list(workspace.forbidden_files)
         try:
-            snapshot = capture_snapshot(workspace.root, watched)
+            snapshot = capture_snapshot(
+                workspace.root, watched, include_ignored=workspace.git_gate != "advisory",
+            )
             baseline_sha = write_snapshot(_bridge(workspace) / "execution_baselines", execution_id, snapshot)
         except ValueError as exc:
             return _base(manifest_task_id=task_id, error=str(exc))
@@ -381,7 +383,9 @@ def claim_execution(workspace: Workspace, execution_id: str, sibling_roots: list
         if workspace.git_gate == "advisory":
             watched = list(workspace.allowed_files) + list(workspace.forbidden_files)
             try:
-                snapshot = capture_snapshot(workspace.root, watched)
+                snapshot = capture_snapshot(
+                    workspace.root, watched, include_ignored=workspace.git_gate != "advisory",
+                )
             except ValueError as exc:
                 return {"ok": False, "error": str(exc)}
             if snapshot.get("git_head_text") != document.get("baseline_commit"):

@@ -64,7 +64,11 @@ def verify_evidence(workspace: Workspace, record: dict, assessment: dict,
             )
         if any(claim.get(key) != value for key, value in expected.items()):
             raise ValueError("claim_identity_mismatch")
-    current = capture_snapshot(workspace.root, list(workspace.allowed_files) + list(workspace.forbidden_files))
+    current = capture_snapshot(
+        workspace.root,
+        list(workspace.allowed_files) + list(workspace.forbidden_files),
+        include_ignored=workspace.git_gate != "advisory",
+    )
     if current.get("git_head_text") != baseline.get("git_head_text"):
         raise ValueError("git_head_mismatch")
     if unchanged and workspace.git_gate == "strict" and not same_snapshot(baseline, current):
