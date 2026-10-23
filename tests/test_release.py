@@ -5,10 +5,11 @@ import contextlib
 import io
 import json
 import tarfile
-import tempfile
 import unittest
 import zipfile
 from pathlib import Path
+
+from tests.support import temporary_directory
 
 from scripts import build_release, scan_release
 
@@ -22,7 +23,7 @@ class ReleaseTest(unittest.TestCase):
             self.assertEqual(scan_release._inspect("example.py", text, (marker,)), ["private-marker example.py"])
 
     def test_private_marker_file_is_external_and_output_never_echoes_values(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
+        with temporary_directory() as tmp:
             directory = Path(tmp)
             root = directory / "public"
             root.mkdir()
@@ -42,7 +43,7 @@ class ReleaseTest(unittest.TestCase):
                 scan_release.load_markers(markers, root)
 
     def test_zip_wheel_and_sdist_contents_are_scanned(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
+        with temporary_directory() as tmp:
             marker = "fictional-private-identity"
             for suffix in (".zip", ".whl", ".tar.gz"):
                 path = Path(tmp) / ("release" + suffix)
@@ -58,7 +59,7 @@ class ReleaseTest(unittest.TestCase):
                 self.assertEqual(scan_release._scan_archive(path, (marker,)), ["private-marker package/readme.txt"])
 
     def test_private_paths_are_rejected_even_without_private_markers(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
+        with temporary_directory() as tmp:
             root = Path(tmp)
             (root / "OpenSource" / "_private_release_audit").mkdir(parents=True)
             self.assertIn("private-path OpenSource", scan_release._scan_tree(root))
@@ -74,7 +75,7 @@ class ReleaseTest(unittest.TestCase):
             self.assertTrue(any(s.startswith("packaged-cache") for s in found))
 
     def test_public_file_list_excludes_private_and_runtime_directories(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
+        with temporary_directory() as tmp:
             root = Path(tmp)
             for name in build_release.ROOT_FILES:
                 (root / name).write_text("public", encoding="utf-8")
@@ -92,7 +93,7 @@ class ReleaseTest(unittest.TestCase):
         self.assertEqual(scan_release._inspect("sample.txt", personal_path), ["user-path sample.txt"])
 
     def test_unreadable_archive_fails_closed(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
+        with temporary_directory() as tmp:
             path = Path(tmp) / "broken.tar.gz"
             path.write_bytes(b"not an archive")
             self.assertEqual(scan_release._scan_archive(path), ["unreadable-archive broken.tar.gz"])

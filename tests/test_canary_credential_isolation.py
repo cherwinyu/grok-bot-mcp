@@ -8,7 +8,8 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
-import tempfile
+
+from tests.support import temporary_directory
 import unittest
 from unittest.mock import patch
 
@@ -18,7 +19,7 @@ from grokbot_mcp.local_safety import LocalError
 
 class CanaryCredentialIsolationTest(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory()
+        self.tmp = temporary_directory()
         self.addCleanup(self.tmp.cleanup)
         self.base = Path(self.tmp.name)
 

@@ -1,6 +1,7 @@
 """Shared CLI presentation: stable codes, no raw exception or arbitrary payload echo."""
 from __future__ import annotations
 import argparse
+import codecs
 import json
 import sys
 from grokbot_mcp.local_safety import LocalError
@@ -12,9 +13,11 @@ class Parser(argparse.ArgumentParser):
 
 
 def emit(value: dict) -> None:
-    if hasattr(sys.stdout, "reconfigure"):
-        sys.stdout.reconfigure(encoding="utf-8")
-    print(json.dumps(value, ensure_ascii=False, indent=2))
+    try:
+        utf8 = codecs.lookup(getattr(sys.stdout, "encoding", None) or "ascii").name == "utf-8"
+    except LookupError:
+        utf8 = False
+    print(json.dumps(value, ensure_ascii=not utf8, indent=2))
 
 
 def failure(exc: Exception) -> dict:

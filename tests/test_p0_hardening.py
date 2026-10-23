@@ -2,8 +2,9 @@
 import json
 import os
 from pathlib import Path
+
+from tests.support import temporary_directory
 import struct
-import tempfile
 import unittest
 from unittest.mock import Mock
 from grokbot_mcp.credentials.blob import validate_url, pack_blob, unpack_blob, BlobError
@@ -44,7 +45,7 @@ class HardeningTest(unittest.TestCase):
             self.fail('invalid UTF-8 credential was accepted')
 
     def document(self, raw):
-        with tempfile.TemporaryDirectory() as name:
+        with temporary_directory() as name:
             p = Path(name) / 'evidence.json'
             p.write_bytes(raw)
             return read_json(p)
@@ -62,14 +63,14 @@ class HardeningTest(unittest.TestCase):
             self.document(b'{"value":' + b'['*96 + b'0' + b']'*96 + b'}')
 
     def test_hardlinked_evidence_rejected(self):
-        with tempfile.TemporaryDirectory() as name:
+        with temporary_directory() as name:
             p = Path(name) / 'evidence.json'; p.write_bytes(b'{}')
             os.link(p, Path(name) / 'another.json')
             with self.assertRaisesRegex(ValueError, 'linked_path_rejected'):
                 read_json(p)
 
     def test_hardlinked_allowed_file_rejected(self):
-        with tempfile.TemporaryDirectory() as name:
+        with temporary_directory() as name:
             root = Path(name) / 'workspace'; root.mkdir()
             p = root / 'allowed.py'; p.write_bytes(b'# fixture')
             os.link(p, Path(name) / 'outside.py')
@@ -116,14 +117,14 @@ class HardeningTest(unittest.TestCase):
 
     def test_duplicate_switch_cannot_enable_submission(self):
         from grokbot_mcp.registry import execution_switch_enabled
-        with tempfile.TemporaryDirectory() as name:
+        with temporary_directory() as name:
             root=Path(name)
             (root/'execution_switch.json').write_bytes(b'{"enabled":false,"enabled":true}')
             self.assertFalse(execution_switch_enabled(root/'registry.json'))
 
     def test_hardlinked_switch_cannot_enable_submission(self):
         from grokbot_mcp.registry import execution_switch_enabled
-        with tempfile.TemporaryDirectory() as name:
+        with temporary_directory() as name:
             root=Path(name)
             path=root/'execution_switch.json';path.write_bytes(b'{"enabled":true}')
             os.link(path,root/'alias.json')

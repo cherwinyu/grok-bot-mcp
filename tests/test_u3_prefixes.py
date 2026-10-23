@@ -5,12 +5,13 @@ import io
 import json
 import os
 import subprocess
-import tempfile
 import unittest
 from contextlib import redirect_stdout
 from dataclasses import replace
 from importlib.resources import files
 from pathlib import Path
+
+from tests.support import temporary_directory
 from unittest.mock import Mock, patch
 
 from grokbot_mcp import admin_cli, facade, registry_prefixes
@@ -413,7 +414,7 @@ class NativePrefixTest(unittest.TestCase):
         self.addCleanup(self.restore_environment)
         self.addCleanup(install_backend, None, None)
         self.addCleanup(facade.install_transport, None)
-        self.temp = tempfile.TemporaryDirectory(prefix="u3-fictional-")
+        self.temp = temporary_directory(prefix="u3-fictional-")
         self.addCleanup(self.temp.cleanup)
         self.base = Path(self.temp.name)
         self.root = make_workspace(self.base)

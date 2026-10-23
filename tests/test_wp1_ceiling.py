@@ -5,12 +5,13 @@ import hashlib
 import io
 import json
 import os
-import tempfile
 import unittest
 from contextlib import nullcontext, redirect_stdout
 from dataclasses import replace
 from importlib.resources import files
 from pathlib import Path
+
+from tests.support import temporary_directory
 from types import SimpleNamespace
 from unittest.mock import MagicMock, Mock, patch
 
@@ -381,7 +382,7 @@ class NativeCeilingTest(unittest.TestCase):
         self.addCleanup(environment.stop)
         self.addCleanup(install_backend, None, None)
         self.addCleanup(facade.install_transport, None)
-        temporary = tempfile.TemporaryDirectory(prefix="wp1-fictional-")
+        temporary = temporary_directory(prefix="wp1-fictional-")
         self.addCleanup(temporary.cleanup)
         self.base = Path(temporary.name)
         self.root = make_workspace(self.base)
