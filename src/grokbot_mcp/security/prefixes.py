@@ -89,9 +89,18 @@ def active_prefix_fields(workspace, document: dict) -> dict:
     return {"active_prefixes": active, "active_prefixes_sha256": hashlib.sha256(raw).hexdigest()}
 
 
+def prefix_excluded(name: str) -> bool:
+    """Built-in exclusions for derived grants, never registry fingerprint input."""
+    key = normalize_policy_path(name, casefold=True)
+    return any(part in {".git", ".bridge", ".cursor", "agents.md"}
+               for part in key.split("/"))
+
+
 def prefix_allows(workspace, name: str) -> bool:
     try:
         name = literal_path(name)
+        if prefix_excluded(name):
+            return False
     except PathRejected:
         return False
     return any(name.startswith(p.prefix) and any(name.endswith(ext) for ext in p.exts)
