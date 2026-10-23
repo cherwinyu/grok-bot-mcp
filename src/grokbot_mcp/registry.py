@@ -6,7 +6,7 @@ import json
 import hashlib
 import os
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, InitVar
 from pathlib import Path
 from dataclasses import asdict
 from grokbot_mcp.execution_profile import ExecutionProfile, parse as parse_profile
@@ -32,6 +32,12 @@ class TestCommand:
     default_timeout: int
     applies_to: str | dict | None = None
     argv: tuple[str, ...] = ()
+    # InitVar keeps this local-only configuration out of asdict/Routine packets.
+    # Store it on the instance without adding a serialized policy field.
+    rerun: InitVar[object | None] = None
+
+    def __post_init__(self, rerun):
+        object.__setattr__(self, "rerun", rerun)
 
 
 @dataclass(frozen=True)
@@ -174,7 +180,7 @@ def _workspace(item: object) -> Workspace:
         raise RegistryError("registry_invalid")
     if any(name in forbidden or any(name == item_name or name.startswith(item_name + "/") for item_name in forbidden) for name in allowed):
         raise RegistryError("registry_invalid")
-    commands = _commands(item.get("test_commands"))
+    commands = _commands(item.get("test_commands"), root=root, forbidden=forbidden, protected=protected)
     selection = item.get("test_selection", "warn")
     allow_globs = item.get("allow_globs", False)
     glob_max_files = item.get("glob_max_files", 200)
@@ -242,7 +248,8 @@ def _strings(value: object) -> list[str]:
     return [item.strip().replace("\\", "/") for item in value]
 
 
-def _commands(value: object) -> tuple[TestCommand, ...]:
+def _commands(value: object, *, root: Path | None = None,
+              forbidden: tuple[str, ...] = (), protected: str = "") -> tuple[TestCommand, ...]:
     if not isinstance(value, list) or not value:
         raise RegistryError("registry_invalid")
     found: list[TestCommand] = []
@@ -268,7 +275,14 @@ def _commands(value: object) -> tuple[TestCommand, ...]:
             raise RegistryError("registry_invalid") from exc
         if any(c.command_id == command_id for c in found):
             raise RegistryError("registry_invalid")
-        found.append(TestCommand(command_id, tuple(task_types), cap, default, applies_to, argv))
+        rerun = None
+        if "rerun" in item:
+            from grokbot_mcp.rerun_config import parse_rerun
+            try:
+                rerun = parse_rerun(item["rerun"], root=root, forbidden=forbidden, protected=protected)
+            except ValueError as exc:
+                raise RegistryError(str(exc)) from exc
+        found.append(TestCommand(command_id, tuple(task_types), cap, default, applies_to, argv, rerun))
     return tuple(found)
 
 

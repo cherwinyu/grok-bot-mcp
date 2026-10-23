@@ -122,14 +122,18 @@ def grok_submit_execution(workspace_id: str, execution_id: str) -> dict:
 
 @mcp.tool(structured_output=False)
 def grok_get_status(workspace_id: str, task_id: str = "", execution_id: str = "",
-                    observe_only: bool = False, verify_current: bool = False) -> dict:
+                    observe_only: bool = False, verify_current: bool = False,
+                    rerun_tests: bool = False) -> dict:
     """Observe local evidence. Default reconciles this ledger; observe_only never writes it.
 
     verify_current rechecks evidence/workspace; cached success is historical, not QA.
     Neither mode sends or retries a webhook.
+    rerun_tests explicitly runs the registered local test for a settled execution;
+    it requires execution_id and cannot be combined with observe_only.
     """
     return facade.get_status(workspace_id, task_id, execution_id,
-                             observe_only=observe_only, verify_current=verify_current)
+                             observe_only=observe_only, verify_current=verify_current,
+                             **({"rerun_tests": True} if rerun_tests else {}))
 
 
 def main() -> None:

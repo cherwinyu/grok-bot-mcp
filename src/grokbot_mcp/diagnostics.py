@@ -24,6 +24,29 @@ def _add(codes, reason, next_step, where="local", blocks="setup submit"):
                          "where": where, "blocks": blocks.split()}
 
 
+_add("rerun_invalid rerun_argv_invalid rerun_env_invalid rerun_timeout_invalid",
+     "The local rerun configuration is invalid. / 本机复跑配置不合法。",
+     "Review rerun: nonempty argv, uppercase environment keys and integer timeout 1–1800. Shells and embedded placeholders are refused. / 核查非空参数数组、大写环境变量名及 1–1800 秒整数超时；不接受 shell 或嵌入占位符。",
+     blocks="rerun")
+_add("rerun_cwd_invalid rerun_cwd_forbidden rerun_cwd_reparse rerun_cwd_missing",
+     "The rerun working directory is unsafe or unavailable. / 复跑工作目录不安全或不可用。",
+     "Use an existing relative directory inside the registered root, outside protected/forbidden paths and without reparse points. / 使用登记根内现有相对目录，避开保护、禁止路径与重解析点。",
+     blocks="rerun")
+_add("rerun_not_configured", "No local rerun is registered for this command. / 此命令未登记本机复跑配置。",
+     "An administrator may configure test_commands.rerun locally; this never grants or resends a Grok task. / 管理员可登记本机 rerun；这不会授权或重发 Grok 任务。", blocks="rerun")
+_add("execution_not_terminal", "The execution has no settled terminal decision. / 执行尚未结算为终态。",
+     "Observe the original execution through the ordinary status workflow first; never resend an uncertain submission. / 先通过原有状态流程观察该执行；不重发不确定提交。", blocks="rerun")
+_add("result_missing", "The execution result file is absent. / 执行结果文件不存在。",
+     "Observe the original execution and preserve its ledger. Never invent a result or resend. / 观察原执行并保留账本，不伪造结果或重发。", blocks="rerun")
+_add("rerun_result_unverified", "Frozen execution evidence did not pass current settlement checks. / 冻结执行证据未通过当前结算校验。",
+     "Review the original result, identity, claim and workspace locally. Do not replace frozen evidence or change QA state. / 本地复核原结果、身份、claim 与工作区；不替换冻结证据或更改 QA 状态。", blocks="rerun")
+_add("rerun_start_failed rerun_timeout rerun_tree_cleanup_failed",
+     "The local process could not start, timed out, or its tree cleanup failed. / 本机进程启动失败、超时或进程树清理失败。",
+     "Review local rerun evidence and the registered executable. A local failure is not permission to resend a Grok task. / 核对本机复跑证据及登记程序；本机失败不允许重发 Grok 任务。", blocks="rerun")
+_add("rerun_source_changed", "Original evidence changed during the local rerun. / 本机复跑期间原始证据发生变化。",
+     "Preserve both receipts for independent review; do not replace the ledger or result. / 保留收据供独立审查，不替换账本或结果。", blocks="rerun")
+
+
 _add("routine_timeout_no_result", ROUTINE_TIMEOUT_MESSAGE,
      "Review the local packet, then manually compare the remote Routine. / 核查本地包后人工对照远端 Routine。")
 _add("archived_task archive_incomplete archive_journal_invalid archive_evidence_changed archive_identity_mismatch archive_reason_required archive_late_result_risk",
