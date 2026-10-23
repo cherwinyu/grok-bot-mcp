@@ -72,6 +72,9 @@ def submit_validation(
 ) -> dict[str, object]:
     if not is_uuid(task_id):
         return _result(error="invalid_task_id")
+    if getattr(workspace, "local_validation", False):
+        from grokbot_mcp.validation.local import submit_local_validation
+        return submit_local_validation(workspace, task_id)
     if not webhook_enabled:
         return _result(task_id, error="validate_manifest_not_enabled")
     if not workspace.writes_enabled:
@@ -170,6 +173,11 @@ def get_validation_status(workspace: Workspace, task_id: str, *,
 
 def _interpret(store: JsonLedger, workspace: Workspace, record: dict[str, object], result: dict[str, object], parsed: dict[str, object]) -> dict[str, object]:
     task_id = str(record["task_id"])
+    from grokbot_mcp.validation.evidence import local_validation_error
+    problem = local_validation_error(workspace, parsed)
+    if problem:
+        result.update(status="failed", error=problem)
+        return result
     result["result_diagnosis"] = diagnosis(parsed, "validate", expected=result_identity(workspace, "validate", record))
     result.update(public_validation_fields(parsed, result["result_diagnosis"],
                   manifest_sha256=record.get("manifest_sha256"), workspace_id=workspace.workspace_id))

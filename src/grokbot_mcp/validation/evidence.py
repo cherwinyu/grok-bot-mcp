@@ -3,9 +3,17 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from grokbot_mcp.registry import Workspace
+from grokbot_mcp.registry import Workspace, policy_fingerprint
 from grokbot_mcp.storage import read_json
 from grokbot_mcp.strict_json import LedgerTooLarge
+
+
+def local_validation_error(workspace: Workspace, proof: dict) -> str | None:
+    if proof.get("validator") == "bridge_local" and (
+            not workspace.local_validation or workspace.git_gate != "advisory"
+            or proof.get("policy_fingerprint") != policy_fingerprint(workspace)):
+        return "local_validation_policy_mismatch"
+    return None
 
 
 def verify_validation_decision(workspace: Workspace, task_id: str,
@@ -20,6 +28,9 @@ def verify_validation_decision(workspace: Workspace, task_id: str,
     to replace the ledger and every other evidence file together.
     """
     path = workspace.root / '.bridge/tasks_v2' / (task_id + '.json')
+    problem = local_validation_error(workspace, proof)
+    if problem:
+        raise ValueError(problem)
     try:
         record, _ = read_json(path)
     except FileNotFoundError as exc:

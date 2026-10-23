@@ -314,13 +314,27 @@ def submit_execution_tool(workspace_id: str, execution_id: str) -> dict[str, obj
 @guarded
 def get_status(workspace_id: str, task_id: str = "", execution_id: str = "", *,
                observe_only: bool = False, verify_current: bool = False,
-               rerun_tests: bool = False) -> dict[str, object]:
+               rerun_tests: bool = False, wait_seconds: int = 0) -> dict[str, object]:
+    if type(wait_seconds) is not int or not 0 <= wait_seconds <= 50:
+        from grokbot_mcp.tool_errors import invalid_argument
+        return invalid_argument(["workspace_id", "task_id", "execution_id", "observe_only", "verify_current", "rerun_tests", "wait_seconds"])
     if type(rerun_tests) is not bool or (rerun_tests and (not execution_id or observe_only)):
         from grokbot_mcp.tool_errors import invalid_argument
         return invalid_argument(["workspace_id", "task_id", "execution_id", "observe_only", "verify_current", "rerun_tests"])
     workspace, error, _siblings = _workspace(workspace_id)
     if error is not None or workspace is None:
         return error or _closed("unknown_workspace", workspace_id)
+    waited_ms = None
+    if wait_seconds:
+        from grokbot_mcp.status_wait import TERMINAL, wait_for_status
+        def probe():
+            results = []
+            if execution_id:
+                results.append(get_execution_status(workspace, execution_id, observe_only=True, verify_current=verify_current))
+            if task_id:
+                results.append(get_validation_status(workspace, task_id, observe_only=True, verify_current=verify_current))
+            return results
+        waited_ms = wait_for_status(probe, wait_seconds)
     payload: dict[str, object] = {
         "workspace_id": workspace.workspace_id,
         "webhook_sent": False,
@@ -328,14 +342,16 @@ def get_status(workspace_id: str, task_id: str = "", execution_id: str = "", *,
         "qa_accepted": False,
     }
     if execution_id:
-        payload["execution"] = get_execution_status(workspace, execution_id, observe_only=observe_only or rerun_tests, verify_current=verify_current)
+        payload["execution"] = get_execution_status(workspace, execution_id, observe_only=observe_only or (rerun_tests and not wait_seconds), verify_current=verify_current)
     if task_id:
-        payload["validation"] = get_validation_status(workspace, task_id, observe_only=observe_only or rerun_tests, verify_current=verify_current)
+        payload["validation"] = get_validation_status(workspace, task_id, observe_only=observe_only or (rerun_tests and not wait_seconds), verify_current=verify_current)
     if not execution_id and not task_id:
         payload["preflight"] = preflight(workspace_id)
-    if rerun_tests:
+    if rerun_tests and (not wait_seconds or payload.get("execution", {}).get("status") in TERMINAL):
         from grokbot_mcp.bridge_tests import compact, rerun
         payload["bridge_tests"] = compact(rerun(workspace, execution_id))
+    if waited_ms is not None:
+        payload["waited_ms"] = waited_ms
     return payload
 
 

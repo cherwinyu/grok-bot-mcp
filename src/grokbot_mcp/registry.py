@@ -63,6 +63,7 @@ class Workspace:
     glob_max_files: int = 200
     allowed_prefixes: tuple[AllowedPrefix, ...] = ()
     prefix_ceiling: tuple[AllowedPrefix, ...] | None = None
+    local_validation: bool = False
 
     def command(self, command_id: str) -> TestCommand | None:
         for item in self.test_commands:
@@ -209,6 +210,9 @@ def _workspace(item: object) -> Workspace:
     if not validate_target or validate_target == execute_target:
         raise RegistryError("registry_invalid")
     writes = item.get("writes_enabled")
+    local_validation = item.get("local_validation", False)
+    if type(local_validation) is not bool or (local_validation and git_gate != "advisory"):
+        raise RegistryError("local_validation_invalid")
     if not isinstance(writes, bool):
         raise RegistryError("registry_invalid")
     machine = item.get("expected_machine", "")
@@ -245,6 +249,7 @@ def _workspace(item: object) -> Workspace:
         glob_max_files=glob_max_files,
         allowed_prefixes=prefixes,
         prefix_ceiling=ceiling,
+        local_validation=local_validation,
     )
 
 
@@ -332,7 +337,8 @@ def command_options(command: TestCommand) -> dict:
 
 
 def workspace_options(workspace: Workspace) -> dict:
-    return {**({"allowed_prefixes": prefix_json(workspace)} if workspace.allowed_prefixes else {}),
+    return {**({"local_validation": True} if workspace.local_validation else {}),
+            **({"allowed_prefixes": prefix_json(workspace)} if workspace.allowed_prefixes else {}),
             **({"prefix_ceiling": prefix_json(workspace, ceiling=True)} if workspace.prefix_ceiling is not None else {}),
             **({"test_selection": workspace.test_selection} if workspace.test_selection != "warn" else {}),
             **({"require_test_output": True} if workspace.require_test_output else {}),
@@ -344,7 +350,7 @@ def workspace_options(workspace: Workspace) -> dict:
 def workspace_profile(workspace: Workspace) -> dict:
     """Omit new defaults so existing generated materials retain their bytes."""
     value = asdict(workspace)
-    for key in ("test_selection", "require_test_output", "other_prefixes", "allow_globs", "glob_max_files", "allowed_prefixes", "prefix_ceiling"):
+    for key in ("test_selection", "require_test_output", "other_prefixes", "allow_globs", "glob_max_files", "allowed_prefixes", "prefix_ceiling", "local_validation"):
         value.pop(key)
     value.update(workspace_options(workspace))
     for item, command in zip(value["test_commands"], workspace.test_commands):

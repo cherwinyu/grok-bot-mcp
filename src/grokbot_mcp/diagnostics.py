@@ -24,6 +24,14 @@ def _add(codes, reason, next_step, where="local", blocks="setup submit"):
                          "where": where, "blocks": blocks.split()}
 
 
+_add("local_validation_invalid",
+     "Local validation requires a boolean and the advisory Git gate. / 本地校验必须是布尔值且仅支持 advisory。",
+     "Review the declared registry policy locally; do not enable real switches. / 本地核查登记策略，不开启真实执行开关。")
+_add("local_validation_policy_mismatch",
+     "The local validation proof does not match the current opt-in policy. / 本地校验证据与当前启用策略不一致。",
+     "Preserve the original proof and ledger; review the policy fingerprint. Do not resend or replace evidence. / 保留原证据和账本，核查策略指纹；不得重发或替换证据。",
+     blocks="prepare_execution claim acceptance")
+
 _add("rerun_invalid rerun_argv_invalid rerun_env_invalid rerun_timeout_invalid",
      "The local rerun configuration is invalid. / 本机复跑配置不合法。",
      "Review rerun: nonempty argv, uppercase environment keys and integer timeout 1–1800. Shells and embedded placeholders are refused. / 核查非空参数数组、大写环境变量名及 1–1800 秒整数超时；不接受 shell 或嵌入占位符。",

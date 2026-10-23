@@ -177,3 +177,39 @@ be resent. `runtime_drift` compares startup/current package and registry hashes;
 changed package bytes add `process_restart_recommended` to `warnings`, not
 `blocking_reasons`. Restart the MCP process and check its identity after installation
 changes; these hints do not authorize execution or establish remote reachability.
+## Local validation
+
+An administrator may opt an advisory workspace into `"local_validation": true`.
+It defaults to false and is rejected with a strict Git gate. Only true is added
+to the policy fingerprint; omitted/false retains existing policy and Routine
+content (apart from the release version banner). Enabling it changes the policy
+identity, so the execute Routine binding must be explicitly reviewed again.
+
+`grok_submit_validation` then checks the manifest locally without credentials or
+a webhook. No execution switch is needed for this check; `writes_enabled` is
+still required to publish evidence. `grok_prepare_execution` performs this check
+automatically only when neither a validation ledger nor a result exists. Existing
+and uncertain submissions keep their original handling and cannot be retried.
+
+The bridge reuses admission checks for manifest identity, digest, forbidden paths,
+exact scope and frozen prefix ceilings. Advisory HEAD semantics remain: divergence
+from the registered HEAD alone is not a failure; unreadable Git state, invalid
+manifest baselines and protected changes still refuse. Claim retains its full
+baseline and scope checks. The hash is captured at local admission and checked
+again during assessment; it is not an external attestation of earlier file bytes.
+
+Results use `.bridge/results_v2/<task_id>.json`, the shared atomic publisher and
+the normal observation/freeze path. They include `validator: "bridge_local"` and
+the policy fingerprint; failures contain `status: "failed"` and `validation_errors`.
+The submission response includes `webhook_sent: false` and `validated_locally: true`.
+Claim and execution verification accept these proofs only while local validation
+remains enabled under the same fingerprint. Frozen failures are never replaced.
+
+`grok_get_status(wait_seconds=0)` keeps the existing response. An integer from 1
+through 50 enables read-only polling at 1, 2, 4, 5, 5… seconds (bounded by the
+remaining time). A terminal state or a complete validated result returns early;
+the response adds `waited_ms`. After polling, one normal query uses the original
+options. `observe_only` remains read-only. With `rerun_tests`, waiting comes first,
+then a normal reconciliation and a local rerun only for a terminal execution;
+`rerun_tests` still cannot be combined with `observe_only`.
+

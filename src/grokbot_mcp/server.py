@@ -29,6 +29,8 @@ class BridgeServer(MCPServer):
                         raise TypeError
                     if annotation == "bool" and type(value) is not bool:
                         raise TypeError
+                    if key == "wait_seconds" and (type(value) is not int or not 0 <= value <= 50):
+                        raise TypeError
             except TypeError:
                 return _error_result(invalid_argument(list(signature.parameters)))
         try:
@@ -123,17 +125,19 @@ def grok_submit_execution(workspace_id: str, execution_id: str) -> dict:
 @mcp.tool(structured_output=False)
 def grok_get_status(workspace_id: str, task_id: str = "", execution_id: str = "",
                     observe_only: bool = False, verify_current: bool = False,
-                    rerun_tests: bool = False) -> dict:
+                    rerun_tests: bool = False, wait_seconds: int = 0) -> dict:
     """Observe local evidence. Default reconciles this ledger; observe_only never writes it.
 
     verify_current rechecks evidence/workspace; cached success is historical, not QA.
     Neither mode sends or retries a webhook.
     rerun_tests explicitly runs the registered local test for a settled execution;
     it requires execution_id and cannot be combined with observe_only.
+    wait_seconds (0..50) polls read-only before the final query and any terminal rerun.
     """
     return facade.get_status(workspace_id, task_id, execution_id,
                              observe_only=observe_only, verify_current=verify_current,
-                             **({"rerun_tests": True} if rerun_tests else {}))
+                             **({"rerun_tests": True} if rerun_tests else {}),
+                             **({"wait_seconds": wait_seconds} if type(wait_seconds) is not int or wait_seconds != 0 else {}))
 
 
 def main() -> None:

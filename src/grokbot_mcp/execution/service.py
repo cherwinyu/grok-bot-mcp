@@ -119,7 +119,8 @@ def _sibling_has(execution_id: str, sibling_roots: list[Path]) -> bool:
     return False
 
 
-def assess(workspace: Workspace, task_id: str, *, check_workspace: bool = True) -> dict[str, object]:
+def assess_manifest(workspace: Workspace, task_id: str) -> dict[str, object]:
+    """Shared deterministic policy checks, independent of a validation proof."""
     rejection = workspace_git_rejection(workspace.root)
     if rejection:
         return {"ok": False, "error": rejection}
@@ -147,7 +148,27 @@ def assess(workspace: Workspace, task_id: str, *, check_workspace: bool = True) 
             or len(set(allowed)) != len(allowed) or command is None
             or document.get("task_type") not in command.task_types):
         return {"ok": False, "error": "manifest_policy_mismatch", "manifest_sha256": digest}
+    return {"ok": True, "error": None, "manifest_sha256": digest, "document": document}
+
+
+def assess(workspace: Workspace, task_id: str, *, check_workspace: bool = True) -> dict[str, object]:
+    report = assess_manifest(workspace, task_id)
+    from grokbot_mcp.validation.evidence import local_validation_error
     proof_path = _bridge(workspace) / "results_v2" / f"{task_id}.json"
+    if not report["ok"]:
+        # A changed forbidden/ceiling policy can fail manifest admission before
+        # proof checking. Still identify the revoked local proof consistently.
+        # Preserve the established error precedence for all legacy proofs.
+        try:
+            rejected_proof, _ = read_json(proof_path)
+        except (OSError, ValueError):
+            pass
+        else:
+            problem = local_validation_error(workspace, rejected_proof)
+            if problem:
+                return {**report, "error": problem}
+        return report
+    document, digest = report["document"], report["manifest_sha256"]
     if not proof_path.is_file():
         return {"ok": False, "error": "validation_missing", "manifest_sha256": digest, "document": document}
     try:
@@ -156,6 +177,9 @@ def assess(workspace: Workspace, task_id: str, *, check_workspace: bool = True) 
         return {"ok": False, "error": exc.code, "manifest_sha256": digest, "document": document}
     except (OSError, ValueError) as exc:
         return {"ok": False, "error": "validation_unreadable", "manifest_sha256": digest, "document": document}
+    problem = local_validation_error(workspace, proof)
+    if problem:
+        return {"ok": False, "error": problem, "manifest_sha256": digest, "document": document}
     try:
         validate_result(proof, "validate", expected={"task_id": task_id, "workspace_id": workspace.workspace_id,
                         "machine": workspace.expected_machine, "manifest_sha256": digest})
@@ -206,6 +230,11 @@ def prepare_execution(workspace: Workspace, task_id: str, sibling_roots: list[Pa
         return _base(error="invalid_task_id")
     if not workspace.writes_enabled:
         return _base(manifest_task_id=task_id, error="workspace_writes_disabled")
+    if getattr(workspace, "local_validation", False):
+        from grokbot_mcp.validation.local import validate_if_absent
+        validation = validate_if_absent(workspace, task_id)
+        if validation is not None and not validation["accepted"]:
+            return _base(manifest_task_id=task_id, approval_state="denied", error=validation["error"])
     report = assess(workspace, task_id)
     if report["ok"] is not True:
         return _base(
