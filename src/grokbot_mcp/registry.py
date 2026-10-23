@@ -11,6 +11,7 @@ from pathlib import Path
 from dataclasses import asdict
 from grokbot_mcp.execution_profile import ExecutionProfile, parse as parse_profile
 from grokbot_mcp.strict_json import check_size, LedgerTooLarge
+from grokbot_mcp.security.paths import PathRejected
 
 _SHA = re.compile(r"^[0-9a-f]{40}$")
 _ID = re.compile(r"^[a-z0-9][a-z0-9-]{1,63}$")
@@ -28,6 +29,8 @@ class TestCommand:
     task_types: tuple[str, ...]
     timeout_cap: int
     default_timeout: int
+    applies_to: str | dict | None = None
+    argv: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -46,6 +49,9 @@ class Workspace:
     policy_revision: int = 1
     execution_profile: ExecutionProfile | None = None
     git_gate: str = "strict"
+    test_selection: str = "warn"
+    require_test_output: bool = False
+    other_prefixes: tuple[str, ...] = ()
 
     def command(self, command_id: str) -> TestCommand | None:
         for item in self.test_commands:
@@ -159,6 +165,18 @@ def _workspace(item: object) -> Workspace:
     if any(name in forbidden or any(name == item_name or name.startswith(item_name + "/") for item_name in forbidden) for name in allowed):
         raise RegistryError("registry_invalid")
     commands = _commands(item.get("test_commands"))
+    selection = item.get("test_selection", "warn")
+    required_output = item.get("require_test_output", False)
+    if selection not in ("warn", "reject") or type(required_output) is not bool:
+        raise RegistryError("registry_invalid")
+    others = item.get("other_prefixes", [])
+    if not isinstance(others, list) or (others and git_gate != "advisory"):
+        raise RegistryError("registry_invalid")
+    from grokbot_mcp.security.paths import normalize_policy_path, PathRejected
+    try:
+        others = tuple(dict.fromkeys(normalize_policy_path(p, casefold=True) for p in others))
+    except PathRejected as exc:
+        raise RegistryError("registry_invalid") from exc
     validate_target = item.get("validate_credential_target")
     execute_target = item.get("execute_credential_target")
     if not isinstance(validate_target, str) or not isinstance(execute_target, str):
@@ -195,6 +213,9 @@ def _workspace(item: object) -> Workspace:
         policy_revision=revision,
         execution_profile=profile,
         git_gate=git_gate,
+        test_selection=selection,
+        require_test_output=required_output,
+        other_prefixes=others,
     )
 
 
@@ -223,7 +244,14 @@ def _commands(value: object) -> tuple[TestCommand, ...]:
             raise RegistryError("registry_invalid")
         if cap < 1 or default < 1 or default > cap or cap > 600:
             raise RegistryError("registry_invalid")
-        found.append(TestCommand(command_id, tuple(task_types), cap, default))
+        from grokbot_mcp.test_commands import validate_options
+        try:
+            applies_to, argv = validate_options(item)
+        except (ValueError, PathRejected) as exc:
+            raise RegistryError("registry_invalid") from exc
+        if any(c.command_id == command_id for c in found):
+            raise RegistryError("registry_invalid")
+        found.append(TestCommand(command_id, tuple(task_types), cap, default, applies_to, argv))
     return tuple(found)
 
 
@@ -245,7 +273,8 @@ def policy_fingerprint(workspace: Workspace) -> str:
         "policy_revision": workspace.policy_revision,
         "test_commands": [
             {"id": c.command_id, "task_types": list(c.task_types),
-             "timeout_cap": c.timeout_cap, "default_timeout": c.default_timeout}
+             "timeout_cap": c.timeout_cap, "default_timeout": c.default_timeout,
+             **command_options(c)}
             for c in workspace.test_commands
         ],
     }
@@ -253,5 +282,30 @@ def policy_fingerprint(workspace: Workspace) -> str:
         policy["execution_profile"] = asdict(workspace.execution_profile)
     if workspace.git_gate != "strict":
         policy["git_gate"] = workspace.git_gate
+    policy.update(workspace_options(workspace))
     raw = json.dumps(policy, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("utf-8")
     return hashlib.sha256(raw).hexdigest()
+
+
+def command_options(command: TestCommand) -> dict:
+    return {**({"applies_to": command.applies_to} if command.applies_to is not None else {}),
+            **({"argv": list(command.argv)} if command.argv else {})}
+
+
+def workspace_options(workspace: Workspace) -> dict:
+    return {**({"test_selection": workspace.test_selection} if workspace.test_selection != "warn" else {}),
+            **({"require_test_output": True} if workspace.require_test_output else {}),
+            **({"other_prefixes": list(workspace.other_prefixes)} if workspace.other_prefixes else {})}
+
+
+def workspace_profile(workspace: Workspace) -> dict:
+    """Omit new defaults so existing generated materials retain their bytes."""
+    value = asdict(workspace)
+    for key in ("test_selection", "require_test_output", "other_prefixes"):
+        value.pop(key)
+    value.update(workspace_options(workspace))
+    for item, command in zip(value["test_commands"], workspace.test_commands):
+        item.pop("applies_to")
+        item.pop("argv")
+        item.update(command_options(command))
+    return value

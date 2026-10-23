@@ -8,7 +8,6 @@ import re
 import subprocess
 import sys
 import tempfile
-from dataclasses import asdict
 from importlib.resources import files
 from pathlib import Path
 
@@ -20,6 +19,7 @@ from grokbot_mcp.credentials.backend import status_for
 from grokbot_mcp.registry import (
     RegistryError, _workspace, default_registry_path, execution_switch_enabled,
     load_registry, switch_path,
+    workspace_profile,
 )
 from grokbot_mcp.routine import MODES, confirmation, read_routine, routine_readiness
 from grokbot_mcp.security.gitcheck import git_error, git_snapshot, workspace_git_rejection
@@ -57,12 +57,14 @@ def yes(prompt: str) -> bool:
 
 
 def register(registry: Path, workspace_id: str, *, mode: str = "create",
-             git_gate: str = "strict") -> None:
+             git_gate: str = "strict", other_prefixes: list[str] | None = None) -> None:
     """Add one workspace, preserving all previously registered entries."""
     safe_path(registry)
     if not re.fullmatch(r"[a-z0-9][a-z0-9-]{1,63}", workspace_id):
         raise ValueError("invalid_workspace_id")
     if git_gate not in {"strict", "advisory"}:
+        raise ValueError("invalid_git_gate")
+    if other_prefixes and git_gate != "advisory":
         raise ValueError("invalid_git_gate")
     before = registry.read_bytes() if registry.exists() else None
     existing = load_registry(registry) if registry.exists() else {}
@@ -110,6 +112,9 @@ def register(registry: Path, workspace_id: str, *, mode: str = "create",
     }
     if git_gate == "advisory":
         item["git_gate"] = "advisory"
+    if other_prefixes:
+        from grokbot_mcp.security.paths import normalize_policy_path
+        item["other_prefixes"] = list(dict.fromkeys(normalize_policy_path(p, casefold=True) for p in other_prefixes))
     _workspace(item)
     if any(w.root.resolve() == root for w in existing.values()):
         raise ValueError("workspace_root_already_registered")
@@ -133,7 +138,7 @@ def generate(registry: Path, workspace_id: str, mode: str = "reuse") -> Path:
     workspace = load_registry(registry)[workspace_id]
     safe_path(workspace.root)
     safe_path(registry)
-    profile = asdict(workspace)
+    profile = workspace_profile(workspace)
     if workspace.git_gate == "strict":
         profile.pop("git_gate")
     profile["root"] = str(workspace.root)
@@ -178,7 +183,7 @@ def generate(registry: Path, workspace_id: str, mode: str = "reuse") -> Path:
     for phase in ("validate", "execute"):
         text += f"## Routine: grok-bridge-{workspace_id}-{phase}\n\n" + render_routine(
             phase, workspace_root=workspace.root, workspace_id=workspace_id, registry=registry,
-            python=Path(interpreter()), mode=mode) + "\n"
+            python=Path(interpreter()), mode=mode, test_options=profile) + "\n"
     text += "\n核对、创建或迁移完成后，告知我在哪里查看各自的 Webhook URL 和密钥。不要把密钥写入聊天或文件。由我回到本地向导填写，并确认是否已启用。\n"
     output = registry.parent / "setup" / workspace_id
     checklist = (
@@ -302,6 +307,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--routine-mode", choices=MODES, help="reuse keeps Routine/Webhook but upgrades the claim entry")
     parser.add_argument("--git-gate", choices=("strict", "advisory"), default="strict",
                         help="Git gate for a newly registered workspace; strict is byte-compatible default")
+    parser.add_argument("--other-prefix", action="append", default=[],
+                        help="Other writers' relative directory prefix; new advisory registrations only / 其他会话目录前缀")
     parser.add_argument("--replace-credentials", action="store_true", help="Explicit replacement prompts, never automatic")
     parser.add_argument("--reconfirm-bindings", action="store_true", help="Explicit administrator recheck of existing bindings")
     parser.add_argument("--allow-writes", action="store_true", help="Explicit reviewed workspace-write opt-in; never enables submission")
@@ -309,7 +316,9 @@ def main(argv: list[str] | None = None) -> int:
         args = parser.parse_args(argv)
         readonly_details = args.json or args.export or args.task_id or args.execution_id or args.purpose != "setup"
         writes = (args.generate_only or args.replace_credentials or args.reconfirm_bindings
-                  or args.allow_writes or args.routine_mode or args.git_gate != "strict")
+                  or args.allow_writes or args.routine_mode or args.git_gate != "strict" or args.other_prefix)
+        if args.other_prefix and (args.git_gate != "advisory" or args.generate_only):
+            raise ValueError("invalid_arguments")
         if (readonly_details and not args.check) or (args.check and writes):
             raise ValueError("invalid_arguments")
         if args.generate_only and (args.allow_writes or args.replace_credentials or args.reconfirm_bindings):
@@ -341,6 +350,8 @@ def main(argv: list[str] | None = None) -> int:
         print("Python (absolute, no activation needed): " + interpreter())
         safe_path(registry)
         existing = load_registry(registry) if registry.exists() else {}
+        if args.other_prefix and workspace_id in existing:
+            raise ValueError("invalid_arguments")
         if not workspace_id:
             print("已登记工作区 / Registered: " + ", ".join(existing))
             workspace_id = input("工作区 ID / Workspace ID: ").strip()
@@ -354,7 +365,8 @@ def main(argv: list[str] | None = None) -> int:
             print(generate(registry, workspace_id, mode))
             return 0
         if workspace_id not in existing:
-            register(registry, workspace_id, mode=mode, git_gate=args.git_gate)
+            register(registry, workspace_id, mode=mode, git_gate=args.git_gate,
+                     **({"other_prefixes": args.other_prefix} if args.other_prefix else {}))
         if args.allow_writes:
             allow_writes(registry, workspace_id)
         workspace = load_registry(registry)[workspace_id]

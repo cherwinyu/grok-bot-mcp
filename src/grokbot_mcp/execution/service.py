@@ -482,7 +482,8 @@ def _interpret(
 ) -> dict[str, object]:
     execution_id = str(record["execution_id"])
     task_id = str(record["manifest_task_id"])
-    result["result_diagnosis"] = diagnosis(parsed, "execute", expected=result_identity(workspace, "execute", record))
+    result["result_diagnosis"] = diagnosis(parsed, "execute", expected=result_identity(workspace, "execute", record),
+                                           require_test_output=getattr(workspace, "require_test_output", False))
     if parsed.get("cursor_cloud_agent_used") is True:
         return _fail(store, execution_id, result, "external_agent_rejected", result_sha256)
     identity_ok = (
@@ -497,10 +498,16 @@ def _interpret(
         return _fail(store, execution_id, result, "identity_mismatch", result_sha256)
     report = assess(workspace, task_id, check_workspace=False)
     try:
-        baseline, current = verify_evidence(workspace, record, report, require_claim=True)
+        baseline, current = verify_evidence(workspace, record, report, require_claim=True, review_head=True)
     except (OSError, ValueError) as exc:
         return _fail(store, execution_id, result, str(exc), result_sha256)
     delta = execution_delta(baseline, current)
+    if workspace.git_gate == "advisory":
+        from grokbot_mcp.security.git_review import changes_since_baseline
+        try:
+            delta = changes_since_baseline(getattr(workspace, "root", None), baseline, current)
+        except (OSError, ValueError) as exc:
+            return _fail(store, execution_id, result, str(exc), result_sha256)
     result["changed_files"] = delta
     result["code_modified"] = bool(delta)
     document = report.get("document")
@@ -522,6 +529,12 @@ def _interpret(
     out_of_scope = sorted({name for name in set(reported) | set(delta) if match_path(name) not in allowed_keys})
     if workspace.git_gate == "advisory":
         result["out_of_scope_changes"] = out_of_scope
+        from grokbot_mcp.security.git_review import review
+        result["git_review"] = review(baseline, current, delta, reported, list(allowed),
+                                      getattr(workspace, "other_prefixes", ()))
+        # Preserve the old outside-allowed union, including declared others.
+        if result["git_review"]["head_changed"]:
+            return _fail(store, execution_id, result, "git_head_mismatch", result_sha256)
         if (reported_keys & allowed_keys) != (delta_keys & allowed_keys):
             return _fail(store, execution_id, result, "result_inconsistent", result_sha256)
     elif any(_outside(match_path(name), allowed_keys, workspace.forbidden_files) for name in delta):
@@ -536,6 +549,14 @@ def _interpret(
     command = document.get("test_command_id") if isinstance(document, dict) else None
     if not isinstance(tests, dict) or tests.get("command_id") != command:
         return _fail(store, execution_id, result, "illegal_test_command", result_sha256)
+    if issue["category"] == "test_evidence_missing":
+        return _fail(store, execution_id, result, "test_evidence_missing", result_sha256)
+    from grokbot_mcp.test_commands import enhanced_tests
+    enhanced = enhanced_tests(workspace, workspace.command(command))
+    if enhanced:
+        # Raw output stays only in the result file; status/ledger contain metadata.
+        result["tests"] = {k: tests[k] for k in ("command_id", "passed", "failed", "exit_code", "not_run",
+                            "unit", "case_count", "assertion_count", "output_sha256", "output_bytes") if k in tests}
     if tests.get("not_run") is True:
         result.update(test_passed=None, test_failed=None, godot_exit_code=None)
         return _fail(store, execution_id, result, "execution_failed", result_sha256)
@@ -546,7 +567,8 @@ def _interpret(
         return _fail(store, execution_id, result, "test_failed", result_sha256)
     result["test_passed"] = passed
     result["test_failed"] = failed
-    result["godot_exit_code"] = exit_code
+    godot_exit_code = exit_code if not enhanced or command == "godot" or command.startswith("godot_") else None
+    result["godot_exit_code"] = godot_exit_code
     if passed < 0 or failed != 0 or exit_code != 0 or parsed.get("status") == "failed":
         return _fail(store, execution_id, result, "test_failed", result_sha256)
     if parsed.get("status") != "succeeded":
@@ -559,9 +581,10 @@ def _interpret(
                  result_sha256=result_sha256, verified_at=verified_at, historical_status="succeeded",
                  terminal=True, verified_snapshot=current, late_result=deadline(record)["deadline_exceeded"],
                  verified_summary={"changed_files": delta, "code_modified": bool(delta),
-                                   **({"out_of_scope_changes": out_of_scope}
+                                   **({"out_of_scope_changes": out_of_scope, "git_review": result["git_review"]}
                                       if workspace.git_gate == "advisory" else {}),
-                                   "test_passed": passed, "test_failed": failed, "godot_exit_code": exit_code,
+                                   "test_passed": passed, "test_failed": failed, "godot_exit_code": godot_exit_code,
+                                   **({"tests": result["tests"]} if enhanced else {}),
                                    "result_diagnosis": result.get("result_diagnosis")})
     result.update(verified_at=verified_at, historical_status="succeeded", verification_scope="current",
                   current_integrity=True, integrity_error=None)
@@ -613,6 +636,9 @@ def _fail(store: JsonLedger, execution_id: str, result: dict[str, object], code:
     summary = {"result_diagnosis": result.get("result_diagnosis")}
     if isinstance(result.get("out_of_scope_changes"), list):
         summary["out_of_scope_changes"] = result["out_of_scope_changes"]
+    for key in ("git_review", "tests"):
+        if key in result:
+            summary[key] = result[key]
     store.update(execution_id, execution_state=state, qa_state="rejected", error=code,
                  result_sha256=result_sha256, verified_at=verified_at, historical_status=state, terminal=True,
                  late_result=deadline(store.read(execution_id))["deadline_exceeded"],

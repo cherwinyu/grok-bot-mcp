@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 from contextlib import ExitStack
-from dataclasses import asdict
 from pathlib import Path
 import uuid
 
@@ -10,7 +9,7 @@ from grokbot_mcp import file_transaction
 from grokbot_mcp.client_config import inspect_installation, workspace_checks
 from grokbot_mcp.identity import TEMPLATE_VERSION, digest, path_id
 from grokbot_mcp.local_safety import LocalError, atomic_replace, create_new, current_hash, json_bytes, read_document, safe_path, local_lock
-from grokbot_mcp.registry import load_registry, policy_fingerprint
+from grokbot_mcp.registry import load_registry, policy_fingerprint, workspace_profile
 from grokbot_mcp.routine import confirmation, read_routine
 from grokbot_mcp.security.paths import is_uuid
 from grokbot_mcp.storage import JsonLedger, utc_now
@@ -68,7 +67,7 @@ def _snapshot_binding(path: Path) -> dict | None:
 
 
 def _profile(workspace, *, local_details=False) -> dict:
-    value = asdict(workspace)
+    value = workspace_profile(workspace)
     if workspace.git_gate == "strict":
         value.pop("git_gate")
     value["root_id"] = path_id("workspace-root", workspace.root)
@@ -192,7 +191,7 @@ def _packet(profile: dict, python: Path, registry: Path) -> str:
     text += "\nUse this interpreter and explicit registry (local private paths; do not publish):\n```json\n" + json_bytes({"python": str(python), "registry": str(registry)}).decode() + "```\n"
     for phase in ("validate", "execute"):
         text += "\n" + render_routine(phase, workspace_root=Path(profile["root"]),
-            workspace_id=profile["workspace_id"], registry=registry, python=python, mode="migrate")
+            workspace_id=profile["workspace_id"], registry=registry, python=python, mode="migrate", test_options=profile)
     text += "\n## Manual remote readback / 人工回读\nVerify both existing Routine identities; exact root/ID, baseline, whitelist/protected files, interpreter/registry, claim-evidence-v2 and result-contract-v1. Do not paste keys into this file.\n"
     text += "Local finalize is an administrator attestation, NOT remote API verification. Live acceptance needs separate authorization. Never rerun an uncertain task or retrofit claim hashes.\n"
     return text

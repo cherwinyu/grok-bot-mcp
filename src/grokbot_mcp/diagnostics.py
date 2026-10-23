@@ -19,6 +19,15 @@ def _add(codes, reason, next_step, where="local", blocks="setup submit"):
                          "where": where, "blocks": blocks.split()}
 
 
+_add("test_command_scope_mismatch", "Registered test applicability does not match all allowed files. / 登记测试命令不适用于本次文件范围。",
+     "Select an administrator-registered command matching this task; never silently substitute a different test. / 选择适用的已登记 ID，不要暗中替换测试。")
+_add("test_evidence_missing", "Required test output evidence is missing. / 缺少必需的测试输出证据。",
+     "Inspect the original result locally; preserve frozen evidence and never resend. / 本地核查原结果，保留冻结证据，不重发。")
+_add("test_command_template_missing test_file_outside_scope test_file_unsafe test_changed_files_empty invalid_test_argv invalid_test_applicability",
+     "The registered argv template or changed-file list cannot be safely expanded. / 登记参数模板或变更文件列表无法安全展开。",
+     "Review the registered array and exact in-scope paths locally. Never build shell text or scan other files as a fallback. / 本地核对登记数组与范围内路径，不拼接 shell，不回退到扫描其它文件。")
+
+
 _add("ledger_too_large", "Persisted JSON exceeds the 4 MiB byte limit; the read or write was refused. / JSON 超过 4 MiB 字节上限，已拒绝读写。",
      "Preserve the original evidence and inspect its size locally. Do not truncate a ledger, replace frozen evidence, or resend. / 保留原证据并在本地核查大小；不要截断账本、替换冻结证据或重发。",
      blocks="prepare submit claim acceptance")

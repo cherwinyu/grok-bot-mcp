@@ -109,6 +109,17 @@ def capture_snapshot(
     hashes: dict[str, str | None] = {}
     for name in watched:
         hashes[name] = _hash_file(root / name)
+    extra = {}
+    if not include_ignored:
+        dirty_hashes = {}
+        for name in sorted(set(diff_files) | set(status_paths) | set(untracked)):
+            if _skipped(name):
+                continue
+            path = root / name
+            if any(is_reparse_point(p) for p in (path, *path.parents)) or (path.is_file() and path.stat().st_nlink != 1):
+                raise ValueError("reparse")
+            dirty_hashes[name] = _hash_file(path)
+        extra["dirty_hashes"] = dirty_hashes
     return {
         "schema_version": 1,
         "git_head_text": head_text,
@@ -117,6 +128,7 @@ def capture_snapshot(
         "status_paths": sorted(set(status_paths)),
         "ignored": sorted(set(ignored)),
         "file_hashes": hashes,
+        **extra,
     }
 
 
@@ -188,6 +200,7 @@ def same_snapshot(left: dict[str, object], right: dict[str, object]) -> bool:
     return (
         all(left.get(key) == right.get(key) for key in keys)
         and (left.get("ignored") or []) == (right.get("ignored") or [])
+        and ("dirty_hashes" not in left or left["dirty_hashes"] == right.get("dirty_hashes"))
     )
 
 

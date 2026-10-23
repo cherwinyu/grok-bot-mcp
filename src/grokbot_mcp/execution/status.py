@@ -65,7 +65,8 @@ def observe_execution(workspace, execution_id: str, *, observe_only=False, verif
         if read_error:
             result = _fail(view, execution_id, result, read_error, digest or "")
         elif parsed is not None:
-            result["result_diagnosis"] = diagnosis(parsed, "execute", expected=result_identity(workspace, "execute", record))
+            result["result_diagnosis"] = diagnosis(parsed, "execute", expected=result_identity(workspace, "execute", record),
+                                                   require_test_output=workspace.require_test_output)
             # All intermediate records must carry the same immutable identity.
             identity = (parsed.get("protocol_version") in (1, "1") and parsed.get("execution_id") == execution_id
                         and parsed.get("manifest_task_id") == record.get("manifest_task_id")

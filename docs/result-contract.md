@@ -1,5 +1,7 @@
 # Result contract v1 / 结果 JSON 契约
 
+Optional test selection, bounded embedded output and advisory Git review are documented in [English](test-evidence-git-review.md) / [中文](test-evidence-git-review.zh-CN.md). New options are off by default; legacy strict summaries and frozen evidence remain unchanged.
+
 [Deployment](deployment.md) · [部署说明](deployment.zh-CN.md)
 
 `result_contract.py` is the shared checker used by validation/execution interpretation, execution evidence assessment and local result writing. Existing legacy `status`/`error` vocabulary remains; `result_diagnosis` adds a precise category rather than redefining a frozen failure. Local format checking and publishing **never** mean bridge acceptance or human QA.

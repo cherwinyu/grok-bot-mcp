@@ -66,9 +66,12 @@ def prepare_manifest(
     if task_type == "code_change" and not files:
         raise ManifestError("allowed_files_empty")
     criteria = _criteria(acceptance_criteria)
+    from grokbot_mcp.test_commands import selection_warnings
+    try:
+        warnings = selection_warnings(workspace, test_command_id, task_type, files)
+    except ValueError as exc:
+        raise ManifestError(str(exc)) from exc
     command = workspace.command(test_command_id)
-    if command is None or task_type not in command.task_types:
-        raise ManifestError("illegal_test_command")
     timeout = command.default_timeout if execution_timeout is None else execution_timeout
     if isinstance(timeout, bool) or not isinstance(timeout, int) or timeout < 1 or timeout > command.timeout_cap:
         raise ManifestError("invalid_timeout")
@@ -106,6 +109,7 @@ def prepare_manifest(
         "action_required": "none",
         "webhook_sent": False,
         "execution_enabled": False,
+        **({"warnings": warnings} if warnings else {}),
     }
 
 
