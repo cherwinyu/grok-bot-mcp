@@ -182,4 +182,3 @@ claim 和执行核对要求当前仍启用本地校验且指纹一致，否则�
 完整且通过校验的结果立即返回，并附 `waited_ms`。等待后按原选项执行一次普通查询。
 `observe_only` 全程只读；与 `rerun_tests` 合用时先等待，再结算查询，仅终态执行本机复跑。
 `rerun_tests` 与 `observe_only` 仍不能合用。
-

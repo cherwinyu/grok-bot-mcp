@@ -48,4 +48,3 @@
 - Update client setup documentation to the current direct Cursor MCP documentation page.
 
 Earlier private development iterations are not shipped as history in this repository.
-

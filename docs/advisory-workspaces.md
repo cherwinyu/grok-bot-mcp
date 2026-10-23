@@ -212,4 +212,3 @@ the response adds `waited_ms`. After polling, one normal query uses the original
 options. `observe_only` remains read-only. With `rerun_tests`, waiting comes first,
 then a normal reconciliation and a local rerun only for a terminal execution;
 `rerun_tests` still cannot be combined with `observe_only`.
-
