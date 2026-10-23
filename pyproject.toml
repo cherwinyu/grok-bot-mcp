@@ -29,6 +29,9 @@ grokbot_mcp = ["templates/*.md"]
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
 [project.urls]
 Repository = "https://github.com/cherwinyu/grok-bot-mcp"
 Documentation = "https://github.com/cherwinyu/grok-bot-mcp/tree/main/docs"

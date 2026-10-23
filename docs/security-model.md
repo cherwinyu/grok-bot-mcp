@@ -27,6 +27,8 @@
 
 ## Strict and advisory Git gates
 
+See [path normalization and bounded JSON](hardening.md) / [路径规范化与 JSON 上限](hardening.zh-CN.md) for the advisory comparison rules and safe error codes.
+
 `strict` remains the default and preserves the existing HEAD, dirty-worktree, untracked-file and post-run scope refusals. A workspace may explicitly select `advisory`: the claim freezes the then-current HEAD and existing tracked/untracked change list, while later out-of-scope changes are reported instead of failing solely for scope.
 
 Advisory checks every registered protected/forbidden path against the current HEAD at admission and claim, then compares the recorded hashes after claim. `.git` is not path-compared, and the bridge's own untracked `.bridge` runtime directory remains excluded. Git command failures, manifest allow-list validation, claim-once, identity, frozen-evidence and no-resend rules remain fail-closed. Advisory cannot attribute concurrent writes to an agent, cannot detect out-of-scope reads, and is not an OS sandbox. The operator must review Git history and diffs.

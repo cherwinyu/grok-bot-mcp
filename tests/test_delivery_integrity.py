@@ -69,7 +69,7 @@ class DeliveryIntegrityTest(unittest.TestCase):
     def test_wrong_external_hash_rejected_even_with_optimized_python(self):
         with tempfile.TemporaryDirectory() as tmp:
             path, _ = sample_delivery(Path(tmp))
-            proc = subprocess.run([sys.executable, '-O', str(Path(v.__file__)), '--bundle', str(path), '--sha256', '0'*64], capture_output=True, text=True)
+            proc = subprocess.run([sys.executable, '-O', str(Path(v.__file__)), '--bundle', str(path), '--sha256', '0'*64], capture_output=True, text=True, encoding="utf-8", errors="replace")
             self.assertEqual(proc.returncode, 1)
             self.assertEqual(json.loads(proc.stdout)['code'], 'external_sha256_mismatch')
 
@@ -88,7 +88,7 @@ class DeliveryIntegrityTest(unittest.TestCase):
             (root/'b/x.txt').write_bytes(b'X')
             subprocess.run(['git', '-C', str(root), '-c', 'core.autocrlf=false', 'add', '.'], check=True)
             blobs = {n: v.git_hash('blob', (root/n).read_bytes()) for n in ('a','a.d/z.txt','b/x.txt')}
-            expected = subprocess.check_output(['git', '-C', str(root), 'write-tree'], text=True).strip()
+            expected = subprocess.check_output(['git', '-C', str(root), 'write-tree'], text=True, encoding="utf-8", errors="replace").strip()
             self.assertEqual(v.source_tree(blobs, {n:'100644' for n in blobs}), expected)
 
     def test_provenance_tree_mismatch_rejected_after_manifest_is_rebuilt(self):

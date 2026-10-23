@@ -11,6 +11,21 @@ MAX_BYTES = 4 * 1024 * 1024
 MAX_DEPTH = 64
 
 
+class LedgerTooLarge(ValueError):
+    """Safe size-only error at persisted JSON boundaries (never includes a path)."""
+    code = "ledger_too_large"
+
+    def __init__(self, size_bytes: int):
+        self.size_bytes = size_bytes
+        super().__init__(self.code)
+
+
+def check_size(raw: bytes | int) -> None:
+    size = raw if isinstance(raw, int) else len(raw)
+    if size > MAX_BYTES:
+        raise LedgerTooLarge(size)
+
+
 def _pairs(pairs):
     result = {}
     for key, value in pairs:

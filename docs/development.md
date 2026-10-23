@@ -10,6 +10,8 @@ python scripts/scan_release.py --root .
 
 Use Python 3.12. The stdio handshake test starts `python -m grokbot_mcp.server` and expects exactly the seven tools.
 
+`python -m pytest` collects only `tests/`; example workspace tests remain independently runnable. Do not set `PYTHONUTF8` for the Windows encoding gate. See [path and robustness hardening](hardening.md) / [中文说明](hardening.zh-CN.md) for byte limits, safe tool errors and encoding regressions.
+
 Tests build a temporary git repository with a fictional counter module. They install an in-memory credential backend and a mock transport. Do not point tests at a live webhook.
 
 The execution switch for tests is a JSON file next to the temporary registry. Production uses the same filename beside the real registry.

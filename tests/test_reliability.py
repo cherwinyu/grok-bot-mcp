@@ -37,7 +37,7 @@ class ReliabilityTest(unittest.TestCase):
         self.transport = MockTransport()
         facade.install_transport(self.transport)
         self.registry = Path(self.temp.name) / "registry.json"
-        (Path(self.temp.name) / "execution_switch.json").write_text('{"enabled": true}')
+        (Path(self.temp.name) / "execution_switch.json").write_text('{"enabled": true}', encoding="utf-8")
 
     def prepare(self, allowed=None):
         return facade.prepare_task(WORKSPACE_ID, "code_change", "Add a fictional label.",
@@ -108,10 +108,10 @@ class ReliabilityTest(unittest.TestCase):
         task, ex = self.start()
         target = self.path("results_execute", ex["execution_id"])
         target.parent.mkdir(parents=True)
-        target.write_text('{"status":')
+        target.write_text('{"status":', encoding="utf-8")
         status = self.status(ex)
         self.assertIn(status["status"], ("pending", "running"))
-        self.assertNotEqual(json.loads(self.path("executions", ex["execution_id"]).read_text())["execution_state"], "failed")
+        self.assertNotEqual(json.loads(self.path("executions", ex["execution_id"]).read_text(encoding="utf-8"))["execution_state"], "failed")
         self.change()
         self.emit(task, ex)
         self.assertEqual(self.status(ex)["status"], "succeeded")
@@ -121,7 +121,7 @@ class ReliabilityTest(unittest.TestCase):
         facade.submit_validation_tool(WORKSPACE_ID, task["task_id"])
         target = self.path("results_v2", task["task_id"])
         target.parent.mkdir(parents=True)
-        target.write_text('{"status":')
+        target.write_text('{"status":', encoding="utf-8")
         self.assertIn(facade.get_status(WORKSPACE_ID, task_id=task["task_id"])["validation"]["status"], ("pending", "running"))
         write_proof(self.root, task["task_id"], task["manifest_sha256"], ["src/counter.py"])
         self.assertEqual(facade.get_status(WORKSPACE_ID, task_id=task["task_id"])["validation"]["status"], "succeeded")
@@ -130,7 +130,7 @@ class ReliabilityTest(unittest.TestCase):
         task, ex = self.start()
         target = self.path("results_execute", ex["execution_id"])
         target.parent.mkdir(parents=True)
-        target.write_text('{')
+        target.write_text('{', encoding="utf-8")
         started = time.monotonic()
         result = self.status(ex)
         self.assertLess(time.monotonic() - started, 5.0)
@@ -211,7 +211,7 @@ class ReliabilityTest(unittest.TestCase):
     def test_claim_rechecks_frozen_proof_bytes(self):
         task, ex = self.start(claim=False)
         path = self.path("results_v2", task["task_id"])
-        path.write_text(path.read_text() + "\n")
+        path.write_text(path.read_text(encoding="utf-8") + "\n", encoding="utf-8")
         result = facade.claim_for(WORKSPACE_ID, ex["execution_id"])
         self.assertFalse(result["ok"])
         self.assertEqual(result["error"], "validation_hash_mismatch")
@@ -249,7 +249,7 @@ class ReliabilityTest(unittest.TestCase):
     def test_reformatted_proof_rejects_terminal(self):
         task, ex = self.start()
         target = self.path("results_v2", task["task_id"])
-        target.write_text(target.read_text() + "\n")
+        target.write_text(target.read_text(encoding="utf-8") + "\n", encoding="utf-8")
         self.change()
         self.emit(task, ex)
         self.assertEqual(self.status(ex)["error"], "validation_hash_mismatch")
@@ -325,7 +325,7 @@ class ReliabilityTest(unittest.TestCase):
     def test_credentials_and_enabled_do_not_prove_binding(self):
         for phase in ("validate", "execute"):
             path = self.root / ".bridge" / (phase + "_routine_status.json")
-            data = json.loads(path.read_text())
+            data = json.loads(path.read_text(encoding="utf-8"))
             data.pop("binding")
             self.put(path, data)
         result = facade.preflight(WORKSPACE_ID)
@@ -335,7 +335,7 @@ class ReliabilityTest(unittest.TestCase):
 
     def test_wrong_binding_blocks_validation_without_sending(self):
         path = self.root / ".bridge/validate_routine_status.json"
-        data = json.loads(path.read_text())
+        data = json.loads(path.read_text(encoding="utf-8"))
         data["binding"]["workspace_id"] = "other-workspace"
         self.put(path, data)
         task = self.prepare()
@@ -348,7 +348,7 @@ class ReliabilityTest(unittest.TestCase):
         task = self.validated()
         ex = facade.prepare_execution_tool(WORKSPACE_ID, task["task_id"])
         path = self.root / ".bridge/execute_routine_status.json"
-        data = json.loads(path.read_text())
+        data = json.loads(path.read_text(encoding="utf-8"))
         data["binding"]["workspace_root"] = str(self.root.parent / "different-workspace")
         self.put(path, data)
         result = facade.submit_execution_tool(WORKSPACE_ID, ex["execution_id"])
@@ -358,7 +358,7 @@ class ReliabilityTest(unittest.TestCase):
 
     def test_policy_fingerprint_and_claim_entry_mismatch_block(self):
         path = self.root / ".bridge/validate_routine_status.json"
-        original = json.loads(path.read_text())
+        original = json.loads(path.read_text(encoding="utf-8"))
         for field in ("policy_fingerprint", "claim_entry", "registry_path"):
             with self.subTest(field=field):
                 data = json.loads(json.dumps(original))
@@ -434,7 +434,7 @@ class ReliabilityTest(unittest.TestCase):
         self.change()
         target = self.path("results_execute", ex["execution_id"])
         target.parent.mkdir(parents=True)
-        target.write_text('{')
+        target.write_text('{', encoding="utf-8")
         payload = execution_result(ex["execution_id"], task["task_id"], task["manifest_sha256"], ["src/counter.py"])
         def complete():
             time.sleep(0.025)
@@ -521,7 +521,7 @@ class ReliabilityTest(unittest.TestCase):
     def test_binding_revision_change_after_authorization_is_rejected(self):
         task, ex = self.start(claim=False)
         target = self.root / ".bridge/execute_routine_status.json"
-        data = json.loads(target.read_text())
+        data = json.loads(target.read_text(encoding="utf-8"))
         data["binding"]["revision"] += 1
         self.put(target, data)
         self.assertFalse(facade.claim_for(WORKSPACE_ID, ex["execution_id"])["ok"])
@@ -536,7 +536,7 @@ class ReliabilityTest(unittest.TestCase):
         task, ex = self.start()
         target = self.path("results_execute", ex["execution_id"])
         target.parent.mkdir(parents=True)
-        target.write_text('{')
+        target.write_text('{', encoding="utf-8")
         self.expire("executions", ex["execution_id"])
         self.assertEqual(self.status(ex)["status"], "timeout")
         self.change()

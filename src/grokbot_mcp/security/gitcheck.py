@@ -5,7 +5,7 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-from grokbot_mcp.security.paths import contained, is_reparse_point
+from grokbot_mcp.security.paths import contained, is_reparse_point, normalize_policy_path
 
 
 def _run(root: Path, args: list[str], runner=subprocess.run):
@@ -40,12 +40,12 @@ def git_snapshot(root: Path, allowed: tuple[str, ...], expected_head: str,
     status = _run(root, ["status", "--porcelain"], runner)
     diff = _run(root, ["diff", "--name-only", "HEAD"], runner)
     protected = tuple(
-        name.rstrip("/") for name in forbidden
-        if name.rstrip("/") not in {".git", ".bridge"}
+        normalize_policy_path(name) for name in forbidden
+        if normalize_policy_path(name, casefold=True) not in {".git", ".bridge"}
     )
     protected_status = (
         _run(root, ["status", "--porcelain=v1", "--ignored", "--untracked-files=all",
-                    "--", *protected], runner)
+                    "--", *(":(icase,literal)" + name for name in protected)], runner)
         if protected else None
     )
     empty = {
@@ -96,10 +96,10 @@ def git_snapshot(root: Path, allowed: tuple[str, ...], expected_head: str,
         for line in (protected_status.stdout or "").splitlines():
             if len(line) < 4:
                 continue
-            body = line[3:].strip().replace("\\", "/")
+            body = line[3:].strip()
             names = [part.strip() for part in body.split(" -> ")] if " -> " in body else [body]
             for name in names:
-                name = name.rstrip("/")
+                name = normalize_policy_path(name, git_quoted=True)
                 if name and name not in protected_changes:
                     protected_changes.append(name)
         result["protected_or_forbidden_changes"] = sorted(protected_changes)

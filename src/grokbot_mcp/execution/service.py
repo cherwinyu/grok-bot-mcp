@@ -19,7 +19,9 @@ from grokbot_mcp.observation import deadline
 from grokbot_mcp.result_contract import diagnosis, result_identity, validate_result, ContractError
 from grokbot_mcp.security.baseline import capture_snapshot, execution_delta, load_snapshot, replace_snapshot, same_snapshot, write_snapshot
 from grokbot_mcp.security.gitcheck import git_error, git_snapshot, workspace_git_rejection
-from grokbot_mcp.security.paths import is_reparse_point, is_uuid, normalize_repo_path
+from grokbot_mcp.security.paths import is_reparse_point, is_uuid, normalize_repo_path, normalize_policy_path, PathRejected
+from grokbot_mcp.strict_json import LedgerTooLarge, check_size
+import unicodedata
 from grokbot_mcp.security.targets import TargetRejected, resolve_exact_files
 from grokbot_mcp.storage import JsonLedger, read_json, utc_now, sha256_bytes
 from grokbot_mcp.transport.webhook import HttpOutcome, build_payload, post_once
@@ -136,6 +138,8 @@ def assess(workspace: Workspace, task_id: str, *, check_workspace: bool = True) 
         return {"ok": False, "error": "validation_missing", "manifest_sha256": digest, "document": document}
     try:
         proof, proof_sha = read_json(proof_path)
+    except LedgerTooLarge as exc:
+        return {"ok": False, "error": exc.code, "manifest_sha256": digest, "document": document}
     except (OSError, ValueError) as exc:
         return {"ok": False, "error": "validation_unreadable", "manifest_sha256": digest, "document": document}
     try:
@@ -428,6 +432,7 @@ def claim_execution(workspace: Workspace, execution_id: str, sibling_roots: list
         import json
 
         raw = json.dumps(payload, ensure_ascii=True, indent=2, sort_keys=True).encode("utf-8")
+        check_size(raw)
         try:
             handle = os.open(str(claim_file), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
         except FileExistsError:
@@ -500,20 +505,28 @@ def _interpret(
     result["code_modified"] = bool(delta)
     document = report.get("document")
     allowed = set(document.get("allowed_files") or []) if isinstance(document, dict) else set()
+
+    def match_path(name):
+        return (normalize_policy_path(name, casefold=True) if workspace.git_gate == "advisory"
+                else unicodedata.normalize("NFC", name))
+
+    allowed_keys = {match_path(name) for name in allowed}
+    delta_keys = {match_path(name) for name in delta}
     reported = _reported_files(parsed.get("changed_files"), workspace, advisory=workspace.git_gate == "advisory")
     forbidden = set(workspace.forbidden_files)
-    protected_change = any(_blocked(name, forbidden) for name in delta)
-    protected_report = reported is not None and any(_blocked(name, forbidden) for name in reported)
+    protected_change = any(_blocked(name, forbidden, advisory=workspace.git_gate == "advisory") for name in delta)
+    protected_report = reported is not None and any(_blocked(name, forbidden, advisory=workspace.git_gate == "advisory") for name in reported)
     if reported is None or protected_change or protected_report:
         return _fail(store, execution_id, result, "scope_violation", result_sha256)
-    out_of_scope = sorted({name for name in set(reported) | set(delta) if name not in allowed})
+    reported_keys = {match_path(name) for name in reported}
+    out_of_scope = sorted({name for name in set(reported) | set(delta) if match_path(name) not in allowed_keys})
     if workspace.git_gate == "advisory":
         result["out_of_scope_changes"] = out_of_scope
-        if {name for name in reported if name in allowed} != {name for name in delta if name in allowed}:
+        if (reported_keys & allowed_keys) != (delta_keys & allowed_keys):
             return _fail(store, execution_id, result, "result_inconsistent", result_sha256)
-    elif any(_outside(name, allowed, workspace.forbidden_files) for name in delta):
+    elif any(_outside(match_path(name), allowed_keys, workspace.forbidden_files) for name in delta):
         return _fail(store, execution_id, result, "scope_violation", result_sha256)
-    elif set(reported) != set(delta):
+    elif reported_keys != delta_keys:
         return _fail(store, execution_id, result, "result_inconsistent", result_sha256)
     issue = result["result_diagnosis"]
     if issue["category"] in {"format_error", "identity_error"}:
@@ -539,7 +552,7 @@ def _interpret(
     if parsed.get("status") != "succeeded":
         return _fail(store, execution_id, result, "execution_failed", result_sha256)
     task_type = document.get("task_type") if isinstance(document, dict) else None
-    if task_type == "code_change" and any(name not in delta for name in allowed):
+    if task_type == "code_change" and not allowed_keys <= delta_keys:
         return _fail(store, execution_id, result, "result_inconsistent", result_sha256)
     verified_at = utc_now()
     store.update(execution_id, execution_state="succeeded", qa_state="not_reviewed", error=None,
@@ -568,11 +581,11 @@ def _reported_files(value: object, workspace: Workspace, *, advisory: bool = Fal
         if not isinstance(item, str):
             return None
         try:
-            text = normalize_repo_path(item)
+            text = (normalize_policy_path(item) if advisory else
+                    normalize_repo_path(unicodedata.normalize("NFC", item)))
         except Exception:
             return None
-        if not advisory and (text not in workspace.allowed_files
-                             or _outside(text, set(workspace.allowed_files), workspace.forbidden_files)):
+        if not advisory and _outside(text, {unicodedata.normalize("NFC", name) for name in workspace.allowed_files}, workspace.forbidden_files):
             return None
         names.append(text)
     return names
@@ -584,7 +597,13 @@ def _outside(name: str, allowed: set[str], forbidden: tuple[str, ...]) -> bool:
     return any(name == item or name.startswith(item + "/") for item in forbidden)
 
 
-def _blocked(name: str, forbidden: set[str]) -> bool:
+def _blocked(name: str, forbidden: set[str], *, advisory: bool = False) -> bool:
+    if advisory:
+        try:
+            name = normalize_policy_path(name, casefold=True)
+            forbidden = {normalize_policy_path(item, casefold=True) for item in forbidden}
+        except PathRejected:
+            return True
     return any(name == item or name.startswith(item + "/") for item in forbidden)
 
 

@@ -5,11 +5,11 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import posixpath
 import subprocess
 from pathlib import Path
 
-from grokbot_mcp.security.paths import is_reparse_point, is_uuid
+from grokbot_mcp.security.paths import is_reparse_point, is_uuid, normalize_policy_path
+from grokbot_mcp.strict_json import check_size, MAX_BYTES, decode
 
 _SKIP_EXACT = {".bridge"}
 _SKIP_PREFIXES = (".bridge/",)
@@ -34,38 +34,6 @@ def _skipped(name: str) -> bool:
     return name in _SKIP_EXACT or name.startswith(_SKIP_PREFIXES)
 
 
-def _decode_git_path(value: str) -> str:
-    if len(value) < 2 or value[0] != '"' or value[-1] != '"':
-        return value
-    escapes = {
-        "a": "\a", "b": "\b", "t": "\t", "n": "\n",
-        "v": "\v", "f": "\f", "r": "\r", '"': '"', "\\": "\\",
-    }
-    decoded: list[str] = []
-    index = 1
-    while index < len(value) - 1:
-        character = value[index]
-        if character != "\\":
-            decoded.append(character)
-            index += 1
-            continue
-        index += 1
-        if index >= len(value) - 1:
-            decoded.append("\\")
-            break
-        character = value[index]
-        if character in "01234567":
-            end = index + 1
-            while end < min(index + 3, len(value) - 1) and value[end] in "01234567":
-                end += 1
-            decoded.append(chr(int(value[index:end], 8)))
-            index = end
-            continue
-        decoded.append(escapes.get(character, character))
-        index += 1
-    return "".join(decoded)
-
-
 def _status_lists(
     stdout: str, *, decode_ignored: bool = False,
 ) -> tuple[list[str], list[str], list[str]]:
@@ -76,7 +44,7 @@ def _status_lists(
         if line.startswith("!! "):
             name = line[3:].strip()
             if decode_ignored:
-                name = _decode_git_path(name)
+                name = normalize_policy_path(name, git_quoted=True)
             name = name.replace("\\", "/").rstrip("/")
             if name and not _skipped(name):
                 ignored.append(name)
@@ -84,8 +52,12 @@ def _status_lists(
         if len(line) < 4:
             continue
         body = line[3:].strip().replace("\\", "/")
+        if decode_ignored:
+            body = line[3:].strip()
         names = [part.strip() for part in body.split(" -> ")] if " -> " in body else [body]
         for name in names:
+            if decode_ignored:
+                name = normalize_policy_path(name, git_quoted=True)
             name = name.rstrip("/")
             if not name or _skipped(name):
                 continue
@@ -96,11 +68,7 @@ def _status_lists(
 
 
 def _normalized_match_path(value: str) -> str:
-    normalized = value.strip().replace("\\", "/")
-    while normalized.startswith("./"):
-        normalized = normalized[2:]
-    normalized = posixpath.normpath(normalized)
-    return "" if normalized == "." else normalized.casefold().rstrip("/")
+    return normalize_policy_path(value, casefold=True)
 
 
 def _under_watched(name: str, watched: list[str]) -> bool:
@@ -130,6 +98,9 @@ def capture_snapshot(
     if not head_text:
         raise ValueError("git_status_failed")
     diff_files = [line.strip().replace("\\", "/") for line in (diff.stdout or "").splitlines() if line.strip()]
+    if not include_ignored:
+        diff_files = [normalize_policy_path(line.strip(), git_quoted=True)
+                      for line in (diff.stdout or "").splitlines() if line.strip()]
     status_paths, ignored, untracked = _status_lists(
         status.stdout or "", decode_ignored=not include_ignored,
     )
@@ -159,6 +130,7 @@ def write_snapshot(directory: Path, execution_id: str, snapshot: dict[str, objec
     if target.exists():
         raise ValueError("baseline_exists")
     raw = json.dumps(snapshot, ensure_ascii=True, indent=2, sort_keys=True).encode("utf-8")
+    check_size(raw)
     temporary = directory / f".{execution_id}.tmp"
     try:
         with temporary.open("wb") as handle:
@@ -181,6 +153,7 @@ def replace_snapshot(directory: Path, execution_id: str, snapshot: dict[str, obj
     if not target.is_file() or is_reparse_point(target):
         raise ValueError("baseline_missing")
     raw = json.dumps(snapshot, ensure_ascii=True, indent=2, sort_keys=True).encode("utf-8")
+    check_size(raw)
     temporary = directory / f".{execution_id}.tmp"
     try:
         with temporary.open("wb") as handle:
@@ -199,10 +172,12 @@ def load_snapshot(directory: Path, execution_id: str, expected_sha256: object) -
     target = directory / f"{execution_id}.json"
     if not target.is_file() or any(is_reparse_point(part) for part in (target, *target.parents)):
         raise ValueError("baseline_missing")
-    raw = target.read_bytes()
+    with target.open("rb") as handle:
+        raw = handle.read(MAX_BYTES + 1)
+    check_size(raw)
     if hashlib.sha256(raw).hexdigest() != expected_sha256:
         raise ValueError("baseline_missing")
-    parsed = json.loads(raw.decode("utf-8"))
+    parsed = decode(raw)
     if not isinstance(parsed, dict) or not isinstance(parsed.get("file_hashes"), dict):
         raise ValueError("baseline_missing")
     return parsed

@@ -69,6 +69,7 @@ def git(root: Path, *args: str) -> str:
         capture_output=True,
         text=True,
         check=False,
+        encoding="utf-8", errors="replace",
     )
     if proc.returncode != 0:
         raise RuntimeError(proc.stderr or proc.stdout)

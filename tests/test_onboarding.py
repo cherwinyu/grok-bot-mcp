@@ -131,13 +131,13 @@ class OnboardingTest(unittest.TestCase):
 
     def test_explicit_write_opt_in_changes_only_that_field(self):
         self.mutate_registry(writes_enabled=False)
-        before = json.loads(self.registry.read_text())
+        before = json.loads(self.registry.read_text(encoding="utf-8"))
         switch = (self.base / 'execution_switch.json').read_bytes()
         bindings = [(self.root / '.bridge' / (phase + '_routine_status.json')).read_bytes() for phase in ('validate','execute')]
         self.assertEqual(self.run_wizard(['--allow-writes'], ['y'])[0], 0)
         expected = before
         expected['workspaces'][0]['writes_enabled'] = True
-        self.assertEqual(json.loads(self.registry.read_text()), expected)
+        self.assertEqual(json.loads(self.registry.read_text(encoding="utf-8")), expected)
         self.assertEqual((self.base / 'execution_switch.json').read_bytes(), switch)
         self.assertEqual(bindings, [(self.root / '.bridge' / (phase + '_routine_status.json')).read_bytes() for phase in ('validate','execute')])
 
@@ -217,7 +217,7 @@ class OnboardingTest(unittest.TestCase):
                     ('binding_capability_missing', lambda d: d['binding'].update(protocol_capabilities=['manifest-v1','claim-once-v1']))]
         for code, change in variants:
             with self.subTest(code=code):
-                data=json.loads(original); change(data); path.write_text(json.dumps(data))
+                data=json.loads(original); change(data); path.write_text(json.dumps(data), encoding="utf-8")
                 self.assertIn(code, self.codes(self.report()))
         path.unlink()
         self.assertIn('routine_status_unknown', self.codes(self.report()))
@@ -292,10 +292,10 @@ class OnboardingTest(unittest.TestCase):
             with self.subTest(path=path.name), self.assertRaises((ValueError,FileExistsError)):
                 wizard.save_export(path,report,registry=self.registry)
         destination=self.base/'diagnostic.json'
-        destination.write_text('existing')
+        destination.write_text('existing', encoding="utf-8")
         with self.assertRaises(FileExistsError):
             wizard.save_export(destination,report,registry=self.registry)
-        self.assertEqual(destination.read_text(),'existing')
+        self.assertEqual(destination.read_text(encoding="utf-8"),'existing')
 
     def test_diagnostic_serialization_ignores_nested_private_fields(self):
         key='sk_'+('z'*30)
@@ -388,7 +388,7 @@ class TaskDiagnosisTest(unittest.TestCase):
 
     def test_changed_proof_is_reported_without_rewriting_ledger(self):
         c=self.c; task=c.validated(); path=c.path('results_v2',task['task_id'])
-        path.write_text(path.read_text()+' ')
+        path.write_text(path.read_text(encoding="utf-8")+' ', encoding="utf-8")
         before=contents(c.root)
         codes=self.codes(self.report(task_id=task['task_id']))
         self.assertIn('result_changed',codes)
@@ -445,7 +445,7 @@ class TaskDiagnosisTest(unittest.TestCase):
         c=self.c; task=c.validated(); ex=facade.prepare_execution_tool(WORKSPACE_ID,task['task_id'])
         for kind in ('execution_claims','results_execute'):
             with self.subTest(kind=kind):
-                path=c.path(kind,ex['execution_id']); path.parent.mkdir(exist_ok=True); path.write_text('{')
+                path=c.path(kind,ex['execution_id']); path.parent.mkdir(exist_ok=True); path.write_text('{', encoding="utf-8")
                 self.assertNotIn('local_cancellation_available',self.codes(self.report(execution_id=ex['execution_id'])))
                 path.unlink()
 
@@ -492,7 +492,7 @@ class EnvironmentTest(unittest.TestCase):
 
     def test_interpreter_does_not_resolve_venv_symlink(self):
         with tempfile.TemporaryDirectory() as tmp:
-            python=Path(tmp)/'venv python.exe'; python.write_text('fictional')
+            python=Path(tmp)/'venv python.exe'; python.write_text('fictional', encoding="utf-8")
             with patch.object(setup_environment.sys,'executable',str(python)), \
                  patch.object(Path,'resolve',side_effect=AssertionError('must preserve venv entry')):
                 self.assertEqual(setup_environment.interpreter(),str(python))
@@ -504,7 +504,7 @@ class BootstrapTest(unittest.TestCase):
         pwsh=shutil.which('pwsh')
         self.assertIsNotNone(pwsh,'Windows CI must provide PowerShell; do not skip bootstrap verification')
         return subprocess.run([pwsh,'-NoProfile','-NonInteractive','-File',str(script),*args],
-                              capture_output=True,text=True,env=env,timeout=60)
+                              capture_output=True,text=True,env=env,timeout=60, encoding="utf-8", errors="replace")
 
     def test_missing_python_is_actionable(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -520,11 +520,11 @@ class BootstrapTest(unittest.TestCase):
 
     def test_existing_non_venv_directory_is_preserved(self):
         with tempfile.TemporaryDirectory() as tmp:
-            marker=Path(tmp)/'keep.txt'; marker.write_text('preserve')
+            marker=Path(tmp)/'keep.txt'; marker.write_text('preserve', encoding="utf-8")
             result=self.script('-Python',sys.executable,'-InstallDir',tmp)
             self.assertEqual(result.returncode,1)
             self.assertIn('Existing directory is not a recognized venv',result.stdout)
-            self.assertEqual(marker.read_text(),'preserve')
+            self.assertEqual(marker.read_text(encoding="utf-8"),'preserve')
             self.assertEqual(len(list(Path(tmp).iterdir())),1)
 
     def test_stale_installation_is_not_silently_replaced(self):
@@ -532,10 +532,10 @@ class BootstrapTest(unittest.TestCase):
             root=Path(tmp); scripts=root/'scripts'; scripts.mkdir()
             source=Path(__file__).resolve().parents[1]/'scripts/setup.ps1'
             shutil.copyfile(source,scripts/'setup.ps1')
-            (root/'pyproject.toml').write_text('[project]\nversion="0.0.0"\n')
+            (root/'pyproject.toml').write_text('[project]\nversion="0.0.0"\n', encoding="utf-8")
             result=subprocess.run([shutil.which('pwsh'),'-NoProfile','-NonInteractive','-File',str(scripts/'setup.ps1'),
                 '-Python',sys.executable,'-InstallDir',sys.prefix,'-Check','-Workspace',WORKSPACE_ID],
-                capture_output=True,text=True,timeout=60)
+                capture_output=True,text=True,timeout=60, encoding="utf-8", errors="replace")
             self.assertEqual(result.returncode,1)
             self.assertIn('installation_mismatch',result.stdout)
             import importlib.metadata
@@ -573,7 +573,7 @@ class ConfiguredStdioTest(unittest.TestCase):
                 # Deliberately put a fake package in cwd: generated -I must ignore it.
                 outside=base/'客户端 空间'; outside.mkdir()
                 fake=outside/'grokbot_mcp'; fake.mkdir()
-                (fake/'__init__.py').write_text("raise RuntimeError('wrong package from cwd')")
+                (fake/'__init__.py').write_text("raise RuntimeError('wrong package from cwd')", encoding="utf-8")
                 async def run():
                     parameters=StdioServerParameters(command=config['command'],args=config['args'],
                         env={**os.environ,**config['env']},cwd=str(outside))

@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Iterator
 
 from grokbot_mcp.security.paths import is_reparse_point, is_uuid
+from grokbot_mcp.strict_json import check_size
 
 
 def utc_now() -> str:
@@ -31,6 +32,7 @@ def read_json(path: Path) -> tuple[dict[str, object], str]:
     from grokbot_mcp.strict_json import decode, MAX_BYTES
     with path.open("rb") as stream:
         raw = stream.read(MAX_BYTES + 1)
+    check_size(raw)
     parsed = decode(raw)
     return parsed, sha256_bytes(raw)
 
@@ -42,6 +44,7 @@ def write_json_new(path: Path, document: dict[str, object]) -> None:
     if is_reparse_point(path.parent):
         raise ValueError("reparse")
     raw = json.dumps(document, ensure_ascii=True, indent=2, sort_keys=True).encode("utf-8")
+    check_size(raw)
     temporary = path.parent / f".{path.stem}.{uuid.uuid4().hex}.tmp"
     try:
         with temporary.open("wb") as handle:
@@ -112,6 +115,7 @@ class JsonLedger:
         document = self.read(record_id)
         document.update(fields)
         raw = json.dumps(document, ensure_ascii=True, indent=2, sort_keys=True).encode("utf-8")
+        check_size(raw)
         path = self.path_for(record_id)
         temporary = path.parent / f".{record_id}.update.tmp"
         with temporary.open("wb") as handle:

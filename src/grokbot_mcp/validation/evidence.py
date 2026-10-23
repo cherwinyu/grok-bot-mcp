@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 
 from grokbot_mcp.registry import Workspace
 from grokbot_mcp.storage import read_json
+from grokbot_mcp.strict_json import LedgerTooLarge
 
 
 def verify_validation_decision(workspace: Workspace, task_id: str,
@@ -23,6 +24,8 @@ def verify_validation_decision(workspace: Workspace, task_id: str,
         record, _ = read_json(path)
     except FileNotFoundError as exc:
         raise ValueError('validation_ledger_missing') from exc
+    except LedgerTooLarge:
+        raise
     except (OSError, ValueError) as exc:
         raise ValueError('validation_ledger_unreadable') from exc
     if (record.get('task_id') != task_id or record.get('action') != 'validate_manifest'

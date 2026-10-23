@@ -8,6 +8,7 @@ from grokbot_mcp.observation import LedgerView, deadline, observation_lock, quer
 from grokbot_mcp.security.baseline import capture_snapshot, same_snapshot
 from grokbot_mcp.security.paths import is_uuid
 from grokbot_mcp.storage import utc_now
+from grokbot_mcp.strict_json import LedgerTooLarge
 
 
 def observe_validation(workspace, task_id: str, *, observe_only=False, verify_current=False) -> dict:
@@ -21,6 +22,8 @@ def observe_validation(workspace, task_id: str, *, observe_only=False, verify_cu
     with observation_lock(store, observe_only):
         try:
             record = store.read(task_id)
+        except LedgerTooLarge:
+            raise
         except (OSError, ValueError):
             return {**result, "error": "missing_task"}
         view = LedgerView(store, record, not observe_only)

@@ -26,6 +26,7 @@ from grokbot_mcp.security.gitcheck import git_error, git_snapshot, workspace_git
 from grokbot_mcp.security.paths import is_reparse_point
 from grokbot_mcp.security.targets import TargetRejected, resolve_exact_files
 from grokbot_mcp.storage import utc_now, read_json
+from grokbot_mcp.strict_json import check_size
 
 
 def safe_path(path: Path) -> None:
@@ -38,7 +39,7 @@ def write_local(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     descriptor, name = tempfile.mkstemp(dir=path.parent, prefix=".setup-", suffix=".tmp")
     try:
-        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+        with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as handle:
             handle.write(text)
         os.replace(name, path)
     finally:
@@ -46,7 +47,9 @@ def write_local(path: Path, text: str) -> None:
 
 
 def write_json(path: Path, value: dict) -> None:
-    write_local(path, json.dumps(value, ensure_ascii=False, indent=2) + "\n")
+    text = json.dumps(value, ensure_ascii=False, indent=2) + "\n"
+    check_size(text.encode("utf-8"))
+    write_local(path, text)
 
 
 def yes(prompt: str) -> bool:
@@ -74,12 +77,16 @@ def register(registry: Path, workspace_id: str, *, mode: str = "create",
     if rejection:
         raise ValueError(rejection)
     head = subprocess.run(["git", "-C", str(root), "rev-parse", "HEAD"],
-                          capture_output=True, text=True, check=True).stdout.strip()
+                          capture_output=True, text=True, check=True, encoding="utf-8", errors="replace").stdout.strip()
     print("逐行输入允许修改的文件（相对工作区路径），空行结束。不支持通配符。")
     allowed = []
     while value := input("文件: ").strip():
         allowed.append(value)
     protected = input("保护文件（已存在、不可修改的相对路径）: ").strip().replace("\\", "/")
+    if git_gate == "advisory":
+        from grokbot_mcp.security.paths import normalize_policy_path
+        allowed = [normalize_policy_path(name) for name in allowed]
+        protected = normalize_policy_path(protected)
     resolve_exact_files(root, [protected], (".git", ".bridge"))
     forbidden = [".git", ".bridge", protected]
     allowed = resolve_exact_files(root, allowed, tuple(forbidden))

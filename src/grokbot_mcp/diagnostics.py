@@ -19,6 +19,15 @@ def _add(codes, reason, next_step, where="local", blocks="setup submit"):
                          "where": where, "blocks": blocks.split()}
 
 
+_add("ledger_too_large", "Persisted JSON exceeds the 4 MiB byte limit; the read or write was refused. / JSON 超过 4 MiB 字节上限，已拒绝读写。",
+     "Preserve the original evidence and inspect its size locally. Do not truncate a ledger, replace frozen evidence, or resend. / 保留原证据并在本地核查大小；不要截断账本、替换冻结证据或重发。",
+     blocks="prepare submit claim acceptance")
+_add("invalid_argument", "A tool parameter name or type is invalid. / 工具参数名或类型无效。",
+     "Use accepted_arguments and the tool schema; get_status uses task_id or execution_id. / 按 accepted_arguments 和工具 schema 传参；查询使用 task_id 或 execution_id。")
+_add("internal_error", "An unexpected local operation failed; details were withheld. / 本地操作发生意外异常，敏感详情已隐藏。",
+     "Inspect the local diagnostic stream. Observe the original identity; do not retry a submission. / 查看本地诊断日志并观察原标识；不要重试提交。")
+
+
 _add("windows_required", "This bridge requires Windows. / 此桥仅支持 Windows。",
      "Run setup.ps1 in Windows PowerShell; Linux checks do not establish Windows readiness.")
 _add("python_unsupported", "Python 3.12 or newer is required. / Python 版本过旧。",

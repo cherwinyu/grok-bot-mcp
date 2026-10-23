@@ -6,6 +6,7 @@ from grokbot_mcp.observation import LedgerView, deadline, observation_lock, quer
 from grokbot_mcp.security.baseline import same_snapshot
 from grokbot_mcp.security.paths import is_uuid
 from grokbot_mcp.result_contract import diagnosis, result_identity
+from grokbot_mcp.strict_json import LedgerTooLarge
 
 
 def observe_execution(workspace, execution_id: str, *, observe_only=False, verify_current=False) -> dict:
@@ -16,6 +17,8 @@ def observe_execution(workspace, execution_id: str, *, observe_only=False, verif
     with observation_lock(store, observe_only):
         try:
             record = store.read(execution_id)
+        except LedgerTooLarge:
+            raise
         except (OSError, ValueError):
             return _base(execution_id=execution_id, error="missing_or_unreadable_execution", status="unknown")
         view = LedgerView(store, record, not observe_only)

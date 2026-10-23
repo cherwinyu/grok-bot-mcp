@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Harden advisory path normalization (including Git octal UTF-8 quoting), case-insensitive forbidden checks and NFC result comparisons. Strict snapshot serialization is unchanged. / 加固 advisory 路径、Git 八进制 UTF-8 解码、禁区大小写匹配及结果 NFC 比较；strict 快照序列化不变。
+- Refuse oversized persisted JSON before writing and expose `ledger_too_large` on read/write boundaries. Return structured tool argument/internal errors without payloads or tracebacks. / 超限 JSON 写前拒绝并返回明确错误；工具参数及意外异常返回脱敏结构化诊断。
+- Declare UTF-8 file/subprocess encodings and collect only top-level tests with bare pytest; Windows CI no longer sets `PYTHONUTF8`. / 明确文件与子进程编码；默认 pytest 仅收集顶层测试；Windows CI 不再设置 `PYTHONUTF8`。 See [hardening notes](docs/hardening.md) / [加固说明](docs/hardening.zh-CN.md).
 - Add opt-in `git_gate: advisory` for shared dirty workspaces, with claim-time baselines and non-fatal `out_of_scope_changes`; strict remains the byte-compatible default.
 - `grok_list_workspaces` returns `ok: false` and `workspaces: null` when the registry file is missing, instead of an empty workspace list.
 - Result candidates must be `%TEMP%\grokbot-mcp-candidates\<phase>\.<id>.result.tmp` for both validate and execute. `result_cli --source` rejects every other location.

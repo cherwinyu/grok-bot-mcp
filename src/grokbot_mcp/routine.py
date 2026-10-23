@@ -6,6 +6,7 @@ from pathlib import Path
 
 from grokbot_mcp.registry import Workspace, default_registry_path, policy_fingerprint
 from grokbot_mcp.storage import read_json
+from grokbot_mcp.strict_json import LedgerTooLarge
 
 _ALLOWED = {"enabled", "paused", "unknown"}
 MODES = ("reuse", "create", "migrate")
@@ -26,6 +27,8 @@ def read_routine(path: Path) -> dict[str, object]:
         data, digest = read_json(path)
     except FileNotFoundError:
         return unknown
+    except LedgerTooLarge:
+        raise
     except (OSError, ValueError):
         return {**unknown, "routine_status_source": "unreadable"}
     if data.get("routine_status_source") != "user_confirmed":
@@ -92,7 +95,7 @@ def migration_gate(workspace: Workspace) -> str | None:
     """A pending/crashed local migration cannot be bypassed by a status-file edit."""
     path = workspace.root / ".bridge/deployment_migration.json"
     try:
-        from grokbot_mcp.local_safety import read_document, safe_path
+        from grokbot_mcp.local_safety import LocalError, read_document, safe_path
         from grokbot_mcp.security.paths import is_uuid
         safe_path(path)
         if not path.exists():
@@ -103,6 +106,8 @@ def migration_gate(workspace: Workspace) -> str | None:
                 or data.get("state") not in {"pending_remote_review", "completed", "rolled_back"}):
             return "migration_state_invalid"
         return None if data["state"] in {"completed", "rolled_back"} else "migration_pending"
+    except LocalError as exc:
+        return exc.code if exc.code == "ledger_too_large" else "migration_state_invalid"
     except (OSError, ValueError):
         return "migration_state_invalid"
 

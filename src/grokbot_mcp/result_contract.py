@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import re
+import unicodedata
 
 from grokbot_mcp.security.paths import is_uuid, normalize_repo_path, PathRejected
 
@@ -28,6 +29,8 @@ def _require(condition: bool, field: str, expected: str):
 
 def _paths(value, field):
     _require(isinstance(value, list) and all(type(x) is str for x in value), field, "array of repo-relative strings")
+    if field == "changed_files":
+        value = [unicodedata.normalize("NFC", x) for x in value]
     try:
         names = [normalize_repo_path(x) for x in value]
     except PathRejected as exc:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from grokbot_mcp.tool_errors import guarded
 
 from grokbot_mcp.identity import runtime_identity
 from grokbot_mcp.execution_profile import report as environment_report
@@ -65,6 +66,7 @@ def _workspace(workspace_id: str) -> tuple[Workspace | None, dict[str, object] |
     return workspace, None, siblings
 
 
+@guarded
 def list_workspaces() -> dict[str, object]:
     path = default_registry_path()
     try:
@@ -107,6 +109,7 @@ def list_workspaces() -> dict[str, object]:
     return result
 
 
+@guarded
 def preflight(workspace_id: str) -> dict[str, object]:
     workspace, error, _siblings = _workspace(workspace_id)
     if error is not None or workspace is None:
@@ -178,6 +181,7 @@ def preflight(workspace_id: str) -> dict[str, object]:
     return result
 
 
+@guarded
 def prepare_task(
     workspace_id: str,
     task_type: str,
@@ -221,6 +225,7 @@ def prepare_task(
     return result
 
 
+@guarded
 def submit_validation_tool(workspace_id: str, task_id: str) -> dict[str, object]:
     workspace, error, _siblings = _workspace(workspace_id)
     if error is not None or workspace is None:
@@ -238,6 +243,7 @@ def submit_validation_tool(workspace_id: str, task_id: str) -> dict[str, object]
     return result
 
 
+@guarded
 def prepare_execution_tool(workspace_id: str, manifest_task_id: str) -> dict[str, object]:
     workspace, error, siblings = _workspace(workspace_id)
     if error is not None or workspace is None:
@@ -249,6 +255,7 @@ def prepare_execution_tool(workspace_id: str, manifest_task_id: str) -> dict[str
     return result
 
 
+@guarded
 def submit_execution_tool(workspace_id: str, execution_id: str) -> dict[str, object]:
     workspace, error, _siblings = _workspace(workspace_id)
     if error is not None or workspace is None:
@@ -273,6 +280,7 @@ def submit_execution_tool(workspace_id: str, execution_id: str) -> dict[str, obj
     return result
 
 
+@guarded
 def get_status(workspace_id: str, task_id: str = "", execution_id: str = "", *,
                observe_only: bool = False, verify_current: bool = False) -> dict[str, object]:
     workspace, error, _siblings = _workspace(workspace_id)
@@ -293,6 +301,7 @@ def get_status(workspace_id: str, task_id: str = "", execution_id: str = "", *,
     return payload
 
 
+@guarded
 def claim_for(workspace_id: str, execution_id: str) -> dict[str, object]:
     workspace, error, siblings = _workspace(workspace_id)
     if error is not None or workspace is None:

@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from dataclasses import asdict
 from grokbot_mcp.execution_profile import ExecutionProfile, parse as parse_profile
+from grokbot_mcp.strict_json import check_size, LedgerTooLarge
 
 _SHA = re.compile(r"^[0-9a-f]{40}$")
 _ID = re.compile(r"^[a-z0-9][a-z0-9-]{1,63}$")
@@ -90,11 +91,14 @@ def load_registry(path: Path | None = None) -> dict[str, Workspace]:
         from grokbot_mcp.security.paths import is_reparse_point
         if any(is_reparse_point(p) for p in (file, *file.parents)) or file.stat().st_nlink != 1:
             raise ValueError("linked_path_rejected")
-        if file.stat().st_size > MAX_BYTES:
-            raise ValueError("json_too_large")
+        check_size(file.stat().st_size)
         # Keep the established text-reader fault boundary. Parsing is bounded;
         # this is not a filesystem sandbox against concurrent file growth.
-        raw = decode(file.read_text(encoding="utf-8").encode("utf-8"))
+        encoded = file.read_text(encoding="utf-8").encode("utf-8")
+        check_size(encoded)
+        raw = decode(encoded)
+    except LedgerTooLarge as exc:
+        raise RegistryError(exc.code) from exc
     except (OSError, UnicodeError, ValueError) as exc:
         raise RegistryError("registry_unreadable") from exc
     if not isinstance(raw, dict) or type(raw.get("schema_version")) is not int or raw.get("schema_version") != 1 or not isinstance(raw.get("workspaces"), list):
@@ -134,6 +138,22 @@ def _workspace(item: object) -> Workspace:
     allowed = _strings(item.get("allowed_files"))
     forbidden = tuple(_strings(item.get("forbidden_files")))
     protected = item.get("protected_file")
+    if git_gate == "advisory":
+        from grokbot_mcp.security.paths import normalize_policy_path, PathRejected
+        try:
+            allowed = [normalize_policy_path(name) for name in allowed]
+            forbidden = tuple(normalize_policy_path(name) for name in forbidden)
+            protected = normalize_policy_path(protected)
+            forbidden_keys = {normalize_policy_path(name, casefold=True) for name in forbidden}
+            if normalize_policy_path(protected, casefold=True) not in forbidden_keys:
+                raise RegistryError("registry_invalid")
+            protected = next(name for name in forbidden if name.casefold() == protected.casefold())
+            for name in allowed:
+                key = normalize_policy_path(name, casefold=True)
+                if any(key == prefix or key.startswith(prefix + "/") for prefix in forbidden_keys):
+                    raise RegistryError("registry_invalid")
+        except PathRejected as exc:
+            raise RegistryError("registry_invalid") from exc
     if not isinstance(protected, str) or protected not in forbidden:
         raise RegistryError("registry_invalid")
     if any(name in forbidden or any(name == item_name or name.startswith(item_name + "/") for item_name in forbidden) for name in allowed):

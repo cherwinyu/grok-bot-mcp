@@ -9,6 +9,7 @@ from pathlib import Path
 
 from grokbot_mcp.identity import digest
 from grokbot_mcp.security.paths import is_reparse_point
+from grokbot_mcp.strict_json import check_size, LedgerTooLarge
 
 
 class LocalError(ValueError):
@@ -41,7 +42,10 @@ def _pairs(items):
 def parse_json(raw: bytes) -> dict:
     from grokbot_mcp.strict_json import decode
     try:
+        check_size(raw)
         return decode(raw)
+    except LedgerTooLarge as exc:
+        raise LocalError(exc.code) from exc
     except UnicodeError as exc:
         raise LocalError("json_encoding_invalid") from exc
     except json.JSONDecodeError as exc:
@@ -64,7 +68,12 @@ def read_document(path: Path) -> tuple[dict, bytes]:
 
 
 def json_bytes(value: dict) -> bytes:
-    return (json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True, allow_nan=False) + "\n").encode("utf-8")
+    raw = (json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True, allow_nan=False) + "\n").encode("utf-8")
+    try:
+        check_size(raw)
+    except LedgerTooLarge as exc:
+        raise LocalError(exc.code) from exc
+    return raw
 
 
 def current_hash(path: Path) -> str | None:
@@ -74,6 +83,10 @@ def current_hash(path: Path) -> str | None:
 
 def atomic_replace(path: Path, raw: bytes, *, expected: str | None) -> None:
     """Call with the relevant application lock. Refuse external edits before replace."""
+    try:
+        check_size(raw)
+    except LedgerTooLarge as exc:
+        raise LocalError(exc.code) from exc
     safe_path(path)
     if not path.parent.is_dir():
         raise LocalError("parent_missing")
@@ -97,6 +110,10 @@ def atomic_replace(path: Path, raw: bytes, *, expected: str | None) -> None:
 
 
 def create_new(path: Path, raw: bytes) -> None:
+    try:
+        check_size(raw)
+    except LedgerTooLarge as exc:
+        raise LocalError(exc.code) from exc
     safe_path(path)
     try:
         with path.open("xb") as handle:
