@@ -116,9 +116,15 @@ def _check(registry: Path, workspace_id: str, phase: str, identity: str, staged:
         if "tests" in value and value["tests"]["command_id"] != document.get("test_command_id"):
             raise ContractError("tests.command_id", "manifest command ID", category="identity_error", code="result_identity_mismatch")
         # Do not create or retrofit a claim. Existing evidence is the authority.
-        verify_evidence(workspace, record, assess(workspace, task_id, check_workspace=False),
+        evidence = verify_evidence(workspace, record, assess(workspace, task_id, check_workspace=False),
                         require_claim=value["status"] != "pending" or record.get("execution_claim_state") == "claimed",
                         registry=registry)
+        if workspace.allowed_prefixes and value["status"] in {"succeeded", "failed"}:
+            from grokbot_mcp.execution.evidence import creation_evidence
+            baseline, current = evidence
+            not_created = creation_evidence(workspace, document, baseline, current, value["changed_files"])
+            if "not_created" in value and value["not_created"] != not_created:
+                raise LocalError("result_inconsistent")
     previous = None
     before_hash = current_hash(target)
     if before_hash is not None:

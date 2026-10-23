@@ -86,3 +86,7 @@ A validation `format_error` or `identity_error` returns trusted ledger/registry 
 ## P0 evidence reader alignment
 
 Evidence and local staging now share bounded JSON decoding: duplicate keys, NaN/Infinity (including overflowing exponent notation), excessive nesting and oversized payloads are refused. Incomplete UTF-8/JSON retains the existing short observation window; it is not a reason to reissue a Webhook. Hardlinked evidence is rejected before interpretation. Endpoint and parser refusal codes contain no rejected value.
+
+## Optional file creations / 可选新建文件
+
+Tasks with `scope_expansion.create_files` add a measured `not_created` array to the verified execution summary. A declaration left absent does not alone fail the task. If an execute candidate supplies `not_created`, it must be a normalized unique path list matching local evidence. Agent-reported newly created files must belong to the exact task list. No-create tasks retain their previous summary fields and bytes. / 声明后仍未创建的文件由本地证据核对并列入 `not_created`；缺失本身不判失败，新建文件不能超出任务清单，旧任务摘要不增加此字段。

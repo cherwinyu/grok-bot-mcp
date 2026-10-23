@@ -12,6 +12,7 @@ from dataclasses import asdict
 from grokbot_mcp.execution_profile import ExecutionProfile, parse as parse_profile
 from grokbot_mcp.strict_json import check_size, LedgerTooLarge
 from grokbot_mcp.security.paths import PathRejected
+from grokbot_mcp.security.prefixes import AllowedPrefix, parse_prefixes, prefix_json
 
 _SHA = re.compile(r"^[0-9a-f]{40}$")
 _ID = re.compile(r"^[a-z0-9][a-z0-9-]{1,63}$")
@@ -54,6 +55,7 @@ class Workspace:
     other_prefixes: tuple[str, ...] = ()
     allow_globs: bool = False
     glob_max_files: int = 200
+    allowed_prefixes: tuple[AllowedPrefix, ...] = ()
 
     def command(self, command_id: str) -> TestCommand | None:
         for item in self.test_commands:
@@ -143,11 +145,17 @@ def _workspace(item: object) -> Workspace:
     git_gate = item.get("git_gate", "strict")
     if not isinstance(git_gate, str) or git_gate not in {"strict", "advisory"}:
         raise RegistryError("registry_invalid")
-    allowed = _strings(item.get("allowed_files"))
+    try:
+        prefixes = parse_prefixes(item.get("allowed_prefixes", []))
+    except PathRejected as exc:
+        raise RegistryError("registry_invalid") from exc
+    allowed = [] if item.get("allowed_files") == [] else _strings(item.get("allowed_files"))
+    if not allowed and not prefixes:
+        raise RegistryError("registry_invalid")
     forbidden = tuple(_strings(item.get("forbidden_files")))
     protected = item.get("protected_file")
     if git_gate == "advisory":
-        from grokbot_mcp.security.paths import normalize_policy_path, PathRejected
+        from grokbot_mcp.security.paths import normalize_policy_path
         try:
             allowed = [normalize_policy_path(name) for name in allowed]
             forbidden = tuple(normalize_policy_path(name) for name in forbidden)
@@ -178,7 +186,7 @@ def _workspace(item: object) -> Workspace:
     others = item.get("other_prefixes", [])
     if not isinstance(others, list) or (others and git_gate != "advisory"):
         raise RegistryError("registry_invalid")
-    from grokbot_mcp.security.paths import normalize_policy_path, PathRejected
+    from grokbot_mcp.security.paths import normalize_policy_path
     try:
         others = tuple(dict.fromkeys(normalize_policy_path(p, casefold=True) for p in others))
     except PathRejected as exc:
@@ -224,6 +232,7 @@ def _workspace(item: object) -> Workspace:
         other_prefixes=others,
         allow_globs=allow_globs,
         glob_max_files=glob_max_files,
+        allowed_prefixes=prefixes,
     )
 
 
@@ -301,7 +310,8 @@ def command_options(command: TestCommand) -> dict:
 
 
 def workspace_options(workspace: Workspace) -> dict:
-    return {**({"test_selection": workspace.test_selection} if workspace.test_selection != "warn" else {}),
+    return {**({"allowed_prefixes": prefix_json(workspace)} if workspace.allowed_prefixes else {}),
+            **({"test_selection": workspace.test_selection} if workspace.test_selection != "warn" else {}),
             **({"require_test_output": True} if workspace.require_test_output else {}),
             **({"other_prefixes": list(workspace.other_prefixes)} if workspace.other_prefixes else {}),
             **({"allow_globs": True} if workspace.allow_globs else {}),
@@ -311,11 +321,19 @@ def workspace_options(workspace: Workspace) -> dict:
 def workspace_profile(workspace: Workspace) -> dict:
     """Omit new defaults so existing generated materials retain their bytes."""
     value = asdict(workspace)
-    for key in ("test_selection", "require_test_output", "other_prefixes", "allow_globs", "glob_max_files"):
+    for key in ("test_selection", "require_test_output", "other_prefixes", "allow_globs", "glob_max_files", "allowed_prefixes"):
         value.pop(key)
     value.update(workspace_options(workspace))
     for item, command in zip(value["test_commands"], workspace.test_commands):
         item.pop("applies_to")
         item.pop("argv")
         item.update(command_options(command))
+    return value
+
+
+def routine_profile(workspace: Workspace) -> dict:
+    value = workspace_profile(workspace)
+    if workspace.allowed_prefixes:
+        value.pop("allowed_files")
+        value["policy_fingerprint"] = policy_fingerprint(workspace)
     return value

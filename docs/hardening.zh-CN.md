@@ -15,3 +15,5 @@ Advisory 快照解码 Git C 风格引号路径，将八进制转义先累积为�
 文本文件及子进程文本输出显式使用 UTF-8；子进程解码对非法输出字节采用替换策略。JSON 落盘保持 UTF-8；二进制 I/O 保留二进制模式。测试无需设置 `PYTHONUTF8`：直接运行 `python -m pytest`，由 `testpaths = ["tests"]` 限定顶层测试，独立最小示例的测试保持可用。Installed-wheel 验证也不再强制 Python UTF-8 模式。既有测试仅补编码参数，断言与预期结果不变。
 
 验收仍要求原生 Windows 测试、源码树外 installed-wheel 导入、虚构双安装验收、离线演示及发布扫描。环境或权限失败不能算作通过；验收通过也不授权发布或部署。
+
+目录授权 `allowed_prefixes` 与精确 `create_files` 在规范化前执行更严格的字面量路径检查，并检查已有组件的 reparse/硬链接。前缀快照使用 Git 索引及未忽略候选，不遍历忽略目录。缺省空集合保留旧策略和结果字节，详见[目录级授权](advisory-workspaces.zh-CN.md#目录级授权)。

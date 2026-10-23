@@ -138,6 +138,8 @@ def validate_result(value: object, phase: str, *, expected: dict | None = None) 
         if data["status"] == "failed":
             _require(data["validation_passed"] is False, "validation_passed", "false for a failed validation")
     else:
+        if "not_created" in data:
+            _paths(data["not_created"], "not_created")
         if terminal or "changed_files" in data:
             _paths(data.get("changed_files"), "changed_files")
         if terminal or "tests" in data:

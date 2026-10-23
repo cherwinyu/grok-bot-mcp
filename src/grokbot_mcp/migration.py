@@ -9,7 +9,7 @@ from grokbot_mcp import file_transaction
 from grokbot_mcp.client_config import inspect_installation, workspace_checks
 from grokbot_mcp.identity import TEMPLATE_VERSION, digest, path_id
 from grokbot_mcp.local_safety import LocalError, atomic_replace, create_new, current_hash, json_bytes, read_document, safe_path, local_lock
-from grokbot_mcp.registry import load_registry, policy_fingerprint, workspace_profile
+from grokbot_mcp.registry import load_registry, policy_fingerprint, workspace_profile, routine_profile
 from grokbot_mcp.routine import confirmation, read_routine
 from grokbot_mcp.security.paths import is_uuid
 from grokbot_mcp.storage import JsonLedger, utc_now
@@ -67,7 +67,7 @@ def _snapshot_binding(path: Path) -> dict | None:
 
 
 def _profile(workspace, *, local_details=False) -> dict:
-    value = workspace_profile(workspace)
+    value = routine_profile(workspace) if local_details else workspace_profile(workspace)
     if workspace.git_gate == "strict":
         value.pop("git_gate")
     value["root_id"] = path_id("workspace-root", workspace.root)
@@ -118,7 +118,8 @@ def plan(registry: Path, workspace_id: str, python: Path, *, target_registry: Pa
         codes.append("migration_workspace_move_forbidden")
     if current.expected_head != target.expected_head:
         codes.append("migration_head_change_forbidden")
-    if not set(target.allowed_files).issubset(current.allowed_files):
+    if (not set(target.allowed_files).issubset(current.allowed_files)
+            or target.allowed_prefixes != current.allowed_prefixes):
         codes.append("migration_scope_expansion_forbidden")
     if not set(current.forbidden_files).issubset(target.forbidden_files) or current.protected_file != target.protected_file:
         codes.append("migration_protection_change_forbidden")

@@ -5,7 +5,7 @@ from grokbot_mcp.validation.presentation import public_validation_fields
 
 from grokbot_mcp.manifest.store import load_manifest, ManifestError
 from grokbot_mcp.observation import LedgerView, deadline, observation_lock, query_metadata, read_result
-from grokbot_mcp.security.baseline import capture_snapshot, same_snapshot
+from grokbot_mcp.security.baseline import watched_paths, prefix_snapshot_options, capture_snapshot, same_snapshot
 from grokbot_mcp.security.paths import is_uuid
 from grokbot_mcp.storage import utc_now
 from grokbot_mcp.strict_json import LedgerTooLarge
@@ -62,8 +62,9 @@ def observe_validation(workspace, task_id: str, *, observe_only=False, verify_cu
                         raise ValueError("hash_mismatch")
                     current = capture_snapshot(
                         workspace.root,
-                        list(workspace.allowed_files) + list(workspace.forbidden_files),
+                        watched_paths(workspace),
                         include_ignored=workspace.git_gate != "advisory",
+                        **prefix_snapshot_options(workspace),
                     )
                     if not same_snapshot(record.get("verified_snapshot") or {}, current):
                         raise ValueError("workspace_changed_since_verification")
@@ -93,8 +94,9 @@ def observe_validation(workspace, task_id: str, *, observe_only=False, verify_cu
             try:
                 snapshot = capture_snapshot(
                     workspace.root,
-                    list(workspace.allowed_files) + list(workspace.forbidden_files),
+                    watched_paths(workspace),
                     include_ignored=workspace.git_gate != "advisory",
+                    **prefix_snapshot_options(workspace),
                 )
             except (OSError, ValueError):
                 snapshot = None

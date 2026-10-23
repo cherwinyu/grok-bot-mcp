@@ -98,6 +98,9 @@ def list_workspaces() -> dict[str, object]:
             }
         if workspace.git_gate == "advisory":
             item["git_gate"] = "advisory"
+        if workspace.allowed_prefixes:
+            from grokbot_mcp.security.prefixes import prefix_json
+            item["allowed_prefixes"] = prefix_json(workspace)
         items.append(item)
     result = {
         "ok": True,
@@ -123,7 +126,8 @@ def preflight(workspace_id: str) -> dict[str, object]:
     enabled = execution_switch_enabled()
     local_error = git_error(git, workspace.git_gate)
     try:
-        resolve_exact_files(workspace.root, list(workspace.allowed_files), workspace.forbidden_files)
+        if workspace.allowed_files or not workspace.allowed_prefixes:
+            resolve_exact_files(workspace.root, list(workspace.allowed_files), workspace.forbidden_files)
     except TargetRejected as exc:
         local_error = exc.code
     local_ready = local_error is None
@@ -203,6 +207,7 @@ def prepare_task(
     execution_timeout: int | None = None,
     baseline_commit: str | None = None,
     allowed_globs: list[str] | None = None,
+    create_files: list[str] | None = None,
 ) -> dict[str, object]:
     workspace, error, _siblings = _workspace(workspace_id)
     if error is not None or workspace is None:
@@ -231,6 +236,7 @@ def prepare_task(
             baseline_commit=baseline_commit,
             effective_baseline=str(git.get("head_text") or "") if workspace.git_gate == "advisory" else None,
             **({"allowed_globs": allowed_globs} if allowed_globs is not None else {}),
+            **({"create_files": create_files} if create_files is not None else {}),
         )
     except ManifestError as exc:
         return _closed(exc.code, workspace_id)

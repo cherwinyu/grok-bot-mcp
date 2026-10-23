@@ -53,6 +53,7 @@ def prepare_manifest(
     baseline_commit: str | None,
     effective_baseline: str | None = None,
     allowed_globs: list[str] | None = None,
+    create_files: list[str] | None = None,
 ) -> dict[str, object]:
     selected_baseline = effective_baseline or workspace.expected_head
     accepted_inputs = (None, "", workspace.expected_head)
@@ -72,6 +73,13 @@ def prepare_manifest(
         if len(files) > workspace.glob_max_files:
             raise ManifestError("allowed_glob_limit_exceeded")
         expansion = {"allowed_globs": list(allowed_globs), "expanded_files": expanded}
+    if create_files is not None:
+        from grokbot_mcp.security.prefixes import validate_create_files
+        creates = validate_create_files(workspace, create_files)
+        files = list(dict.fromkeys([*files, *creates]))
+        if len(files) > workspace.glob_max_files:
+            raise ManifestError("allowed_glob_limit_exceeded")
+        expansion = {**(expansion or {}), "create_files": creates}
     if task_type == "code_change" and not files:
         raise ManifestError("allowed_files_empty")
     criteria = _criteria(acceptance_criteria)
@@ -167,7 +175,6 @@ def _criteria(values: object) -> list[str]:
 def _files(workspace: Workspace, values: object) -> list[str]:
     if not isinstance(values, list):
         raise ManifestError("allowed_file_outside_policy")
-    allowed = set(workspace.allowed_files)
     found: list[str] = []
     for item in values:
         if not isinstance(item, str):
@@ -176,7 +183,8 @@ def _files(workspace: Workspace, values: object) -> list[str]:
             text = normalize_repo_path(item)
         except PathRejected as exc:
             raise ManifestError(exc.code) from exc
-        if text not in allowed or _blocked(text, workspace.forbidden_files):
+        from grokbot_mcp.security.prefixes import policy_allows
+        if not policy_allows(workspace, text) or _blocked(text, workspace.forbidden_files):
             raise ManifestError("allowed_file_outside_policy")
         if text not in found:
             found.append(text)

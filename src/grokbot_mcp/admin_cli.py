@@ -5,6 +5,8 @@ from grokbot_mcp.local_cli import Parser, emit, failure
 
 
 def main(argv=None) -> int:
+    from grokbot_mcp.setup_wizard import _configure_console
+    _configure_console()
     try:
         parser = Parser(description=__doc__)
         commands = parser.add_subparsers(dest="operation", required=True)
@@ -14,7 +16,9 @@ def main(argv=None) -> int:
         archive.add_argument("--confirm", action="store_true")
         archive.add_argument("--accept-late-result-risk", action="store_true")
         check = commands.add_parser("routine-check")
-        for command in (archive, check):
+        prefixes = commands.add_parser("registry-prefixes")
+        prefixes.add_argument("--write-to", type=Path)
+        for command in (archive, check, prefixes):
             command.add_argument("--registry", required=True, type=Path)
             command.add_argument("--workspace", required=True)
         args = parser.parse_args(argv)
@@ -22,6 +26,9 @@ def main(argv=None) -> int:
             from grokbot_mcp.ledger_archive import archive as run
             result = run(args.registry, args.workspace, args.task_id, reason=args.reason,
                          confirm=args.confirm, accept_late_result_risk=args.accept_late_result_risk)
+        elif args.operation == "registry-prefixes":
+            from grokbot_mcp.registry_prefixes import preview
+            result = preview(args.registry, args.workspace, write_to=args.write_to)
         else:
             from grokbot_mcp.routine_check import check as run
             result = run(args.registry, args.workspace)
