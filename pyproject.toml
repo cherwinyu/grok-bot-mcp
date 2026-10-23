@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "grokbot-mcp-bridge"
-version = "0.1.4b1"
+version = "0.1.5b1"
 description = "Auditable Windows MCP coding task handoffs for user-configured Grok Bot Routines"
 readme = "README.md"
 requires-python = ">=3.12"

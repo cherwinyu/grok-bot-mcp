@@ -42,6 +42,8 @@ def parse_cli(argv: list[str]) -> tuple[str | None, str | None, str | None]:
 
 
 def main(argv: list[str] | None = None) -> int:
+    from grokbot_mcp.setup_wizard import _configure_console
+    _configure_console()
     workspace_id, execution_id, error = parse_cli(list(sys.argv[1:] if argv is None else argv))
     if error is not None or workspace_id is None or execution_id is None:
         print(json.dumps({"ok": False, "error": error or "missing_argument"}))

@@ -56,6 +56,7 @@ class Workspace:
     allow_globs: bool = False
     glob_max_files: int = 200
     allowed_prefixes: tuple[AllowedPrefix, ...] = ()
+    prefix_ceiling: tuple[AllowedPrefix, ...] | None = None
 
     def command(self, command_id: str) -> TestCommand | None:
         for item in self.test_commands:
@@ -147,11 +148,15 @@ def _workspace(item: object) -> Workspace:
         raise RegistryError("registry_invalid")
     try:
         prefixes = parse_prefixes(item.get("allowed_prefixes", []))
+        ceiling = parse_prefixes(item["prefix_ceiling"]) if "prefix_ceiling" in item else None
     except PathRejected as exc:
         raise RegistryError("registry_invalid") from exc
     allowed = [] if item.get("allowed_files") == [] else _strings(item.get("allowed_files"))
-    if not allowed and not prefixes:
+    if not allowed and not prefixes and ceiling is None:
         raise RegistryError("registry_invalid")
+    from grokbot_mcp.security.prefixes import prefixes_within
+    if ceiling is not None and not prefixes_within(prefixes, ceiling):
+        raise RegistryError("prefix_outside_ceiling")
     forbidden = tuple(_strings(item.get("forbidden_files")))
     protected = item.get("protected_file")
     if git_gate == "advisory":
@@ -233,6 +238,7 @@ def _workspace(item: object) -> Workspace:
         allow_globs=allow_globs,
         glob_max_files=glob_max_files,
         allowed_prefixes=prefixes,
+        prefix_ceiling=ceiling,
     )
 
 
@@ -300,6 +306,8 @@ def policy_fingerprint(workspace: Workspace) -> str:
     if workspace.git_gate != "strict":
         policy["git_gate"] = workspace.git_gate
     policy.update(workspace_options(workspace))
+    if workspace.prefix_ceiling is not None:
+        policy.pop("allowed_prefixes", None)
     raw = json.dumps(policy, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("utf-8")
     return hashlib.sha256(raw).hexdigest()
 
@@ -311,6 +319,7 @@ def command_options(command: TestCommand) -> dict:
 
 def workspace_options(workspace: Workspace) -> dict:
     return {**({"allowed_prefixes": prefix_json(workspace)} if workspace.allowed_prefixes else {}),
+            **({"prefix_ceiling": prefix_json(workspace, ceiling=True)} if workspace.prefix_ceiling is not None else {}),
             **({"test_selection": workspace.test_selection} if workspace.test_selection != "warn" else {}),
             **({"require_test_output": True} if workspace.require_test_output else {}),
             **({"other_prefixes": list(workspace.other_prefixes)} if workspace.other_prefixes else {}),
@@ -321,7 +330,7 @@ def workspace_options(workspace: Workspace) -> dict:
 def workspace_profile(workspace: Workspace) -> dict:
     """Omit new defaults so existing generated materials retain their bytes."""
     value = asdict(workspace)
-    for key in ("test_selection", "require_test_output", "other_prefixes", "allow_globs", "glob_max_files", "allowed_prefixes"):
+    for key in ("test_selection", "require_test_output", "other_prefixes", "allow_globs", "glob_max_files", "allowed_prefixes", "prefix_ceiling"):
         value.pop(key)
     value.update(workspace_options(workspace))
     for item, command in zip(value["test_commands"], workspace.test_commands):
@@ -333,7 +342,9 @@ def workspace_profile(workspace: Workspace) -> dict:
 
 def routine_profile(workspace: Workspace) -> dict:
     value = workspace_profile(workspace)
-    if workspace.allowed_prefixes:
+    if workspace.allowed_prefixes or workspace.prefix_ceiling is not None:
         value.pop("allowed_files")
         value["policy_fingerprint"] = policy_fingerprint(workspace)
+    if workspace.prefix_ceiling is not None:
+        value.pop("allowed_prefixes", None)
     return value

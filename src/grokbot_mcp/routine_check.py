@@ -54,7 +54,14 @@ def inspect_text(text: str, workspace, registry: Path, python: Path, kind: str) 
     expected = json.loads(json.dumps(expected))
     if any(profile.get(key) != value for key, value in expected.items()):
         errors.append("routine_profile_mismatch")
-    if workspace.allowed_prefixes:
+    if workspace.prefix_ceiling is not None:
+        if (profile.get("prefix_ceiling") != expected["prefix_ceiling"]
+                or profile.get("policy_fingerprint") != policy_fingerprint(workspace)
+                or "allowed_prefixes" in profile or "allowed_files" in profile):
+            errors.append("routine_prefix_policy_mismatch")
+    elif "prefix_ceiling" in profile:
+        errors.append("routine_prefix_policy_mismatch")
+    elif workspace.allowed_prefixes:
         if (profile.get("allowed_prefixes") != expected["allowed_prefixes"]
                 or profile.get("policy_fingerprint") != policy_fingerprint(workspace)
                 or "allowed_files" in profile):

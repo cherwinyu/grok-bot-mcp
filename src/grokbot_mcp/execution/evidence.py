@@ -59,6 +59,8 @@ def verify_evidence(workspace: Workspace, record: dict, assessment: dict,
             "allowed_files": document["allowed_files"], "claimed_at": record["claimed_at"],
             "target_check": "present", "enforcement": "advisory_precheck",
         }
+        from grokbot_mcp.security.prefixes import active_prefix_fields
+        expected.update(active_prefix_fields(workspace, document))
         creates = document.get("scope_expansion", {}).get("create_files")
         if creates is not None:
             expected["create_files"] = creates
@@ -77,7 +79,7 @@ def verify_evidence(workspace: Workspace, record: dict, assessment: dict,
         workspace.root,
         watched_paths(workspace, document),
         include_ignored=workspace.git_gate != "advisory",
-        **prefix_snapshot_options(workspace),
+        **prefix_snapshot_options(workspace, document),
     )
     if current.get("git_head_text") != baseline.get("git_head_text") and not (review_head and workspace.git_gate == "advisory"):
         raise ValueError("git_head_mismatch")
@@ -100,7 +102,9 @@ def creation_evidence(workspace, document: dict, baseline: dict, current: dict,
     from grokbot_mcp.security.targets import TargetRejected
 
     creates = document.get("scope_expansion", {}).get("create_files")
-    if not workspace.allowed_prefixes:
+    from grokbot_mcp.security.prefixes import manifest_workspace
+    workspace = manifest_workspace(workspace, document)
+    if not workspace.allowed_prefixes and workspace.prefix_ceiling is None:
         return None
     def key(name):
         return normalize_policy_path(name, casefold=workspace.git_gate == "advisory")

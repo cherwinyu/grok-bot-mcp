@@ -153,13 +153,19 @@ def capture_snapshot(
 
 
 def watched_paths(workspace, document: dict | None = None) -> list[str]:
+    if document is not None:
+        from grokbot_mcp.security.prefixes import manifest_workspace
+        workspace = manifest_workspace(workspace, document)
     watched = list(workspace.allowed_files) + list(workspace.forbidden_files)
     if workspace.allowed_prefixes and document:
         watched = list(dict.fromkeys([*watched, *document.get("allowed_files", [])]))
     return watched
 
 
-def prefix_snapshot_options(workspace) -> dict:
+def prefix_snapshot_options(workspace, document: dict | None = None) -> dict:
+    if document is not None:
+        from grokbot_mcp.security.prefixes import manifest_workspace
+        workspace = manifest_workspace(workspace, document)
     return ({"prefix_dirs": tuple(p.prefix for p in workspace.allowed_prefixes)}
             if workspace.allowed_prefixes else {})
 

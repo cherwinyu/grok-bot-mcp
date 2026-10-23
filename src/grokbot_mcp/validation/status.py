@@ -57,14 +57,14 @@ def observe_validation(workspace, task_id: str, *, observe_only=False, verify_cu
             elif verify_current:
                 result["verification_scope"] = "current"
                 try:
-                    _, actual = load_manifest(workspace.root, task_id)
+                    document, actual = load_manifest(workspace.root, task_id)
                     if actual != record.get("manifest_sha256"):
                         raise ValueError("hash_mismatch")
                     current = capture_snapshot(
                         workspace.root,
-                        watched_paths(workspace),
+                        watched_paths(workspace, document) if workspace.prefix_ceiling is not None else watched_paths(workspace),
                         include_ignored=workspace.git_gate != "advisory",
-                        **prefix_snapshot_options(workspace),
+                        **prefix_snapshot_options(workspace, document if workspace.prefix_ceiling is not None else None),
                     )
                     if not same_snapshot(record.get("verified_snapshot") or {}, current):
                         raise ValueError("workspace_changed_since_verification")
@@ -92,13 +92,14 @@ def observe_validation(workspace, task_id: str, *, observe_only=False, verify_cu
             summary = {key: result.get(key) for key in ("validation_passed", "validation_errors", "code_modified",
                         "manifest_sha256", "workspace_id", "allowed_files", "error", "result_diagnosis")}
             try:
+                document = load_manifest(workspace.root, task_id)[0] if workspace.prefix_ceiling is not None else None
                 snapshot = capture_snapshot(
                     workspace.root,
-                    watched_paths(workspace),
+                    watched_paths(workspace, document),
                     include_ignored=workspace.git_gate != "advisory",
-                    **prefix_snapshot_options(workspace),
+                    **prefix_snapshot_options(workspace, document),
                 )
-            except (OSError, ValueError):
+            except (ManifestError, OSError, ValueError):
                 snapshot = None
                 result.update(status="failed", error="snapshot_unavailable", reported_success=False)
                 status = "failed"

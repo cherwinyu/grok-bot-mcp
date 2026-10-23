@@ -28,10 +28,11 @@ def render_routine(phase: str, *, workspace_root: Path, workspace_id: str,
                         "Use the administrator's registered test-command mapping; do not infer a command from this template.")
     writing = package.joinpath("result-writing.md").read_text(encoding="utf-8")
     options = test_options or {}
-    if options.get("allowed_prefixes"):
+    if options.get("allowed_prefixes") or "prefix_ceiling" in options:
         text = text.replace("Stop if the manifest allow-list is not a subset.",
                             "Check the exact task list against the local registry's file/prefix policy; stop on mismatch.")
-        text += "\n" + package.joinpath("prefix-policy.md").read_text(encoding="utf-8")
+        sections = package.joinpath("prefix-policy.md").read_text(encoding="utf-8").split("<!-- prefix-ceiling -->\n")
+        text += "\n" + (sections[1] if "prefix_ceiling" in options else sections[0])
     if phase == "execute" and (options.get("require_test_output") or options.get("test_selection") == "reject"
                               or any(c.get("applies_to") is not None or c.get("argv") for c in options.get("test_commands", []))):
         writing += "\n" + package.joinpath("test-evidence.md").read_text(encoding="utf-8")

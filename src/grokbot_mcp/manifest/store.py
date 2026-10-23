@@ -115,6 +115,9 @@ def prepare_manifest(
         "workspace_id": workspace.workspace_id,
     }
     relative = ".bridge/task_specs/" + task_id + ".json"
+    if workspace.prefix_ceiling is not None:
+        from grokbot_mcp.security.prefixes import prefix_json
+        document["active_prefixes"] = prefix_json(workspace)
     if expansion is not None:
         document["scope_expansion"] = expansion
     write_json_new(manifest_path(workspace.root, task_id), document)

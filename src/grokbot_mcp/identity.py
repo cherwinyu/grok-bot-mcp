@@ -66,6 +66,19 @@ class RuntimeIdentity:
         self.start_registry_sha256 = registry_digest(self.registry)
         self.start_package_sha256 = package_digest(self.package)
 
+    def drift(self, *, registry: Path | None = None) -> dict:
+        current = (registry or default_registry_path()).absolute()
+        package_sha = package_digest(self.package)
+        registry_sha = registry_digest(current)
+        return {
+            "package_changed": package_sha != self.start_package_sha256,
+            "registry_changed_since_start": (current != self.registry or registry_sha != self.start_registry_sha256),
+            "package_sha256_at_start": self.start_package_sha256,
+            "package_sha256_current": package_sha,
+            "registry_sha256_at_start": self.start_registry_sha256,
+            "registry_sha256_current": registry_sha,
+        }
+
     def report(self, *, registry: Path | None = None, workspace_id: str | None = None,
                local_details: bool = False) -> dict:
         current = (registry or default_registry_path()).absolute()
@@ -90,6 +103,10 @@ class RuntimeIdentity:
 
 
 _RUNTIME = RuntimeIdentity()
+
+
+def runtime_drift(*, registry: Path | None = None) -> dict:
+    return _RUNTIME.drift(registry=registry)
 
 
 def runtime_identity(workspace_id: str | None = None, *, registry: Path | None = None,

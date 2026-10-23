@@ -1,5 +1,6 @@
 """Execution observation and optional reconciliation, separate from dispatch."""
 from __future__ import annotations
+from contextlib import nullcontext
 
 from grokbot_mcp.execution.evidence import verify_evidence
 from grokbot_mcp.observation import LedgerView, deadline, observation_lock, query_metadata, read_result
@@ -9,12 +10,15 @@ from grokbot_mcp.result_contract import diagnosis, result_identity
 from grokbot_mcp.strict_json import LedgerTooLarge
 
 
-def observe_execution(workspace, execution_id: str, *, observe_only=False, verify_current=False) -> dict:
+def observe_execution(workspace, execution_id: str, *, observe_only=False, verify_current=False,
+                      _locked_store=None) -> dict:
     from grokbot_mcp.execution.service import _base, _ledger, _from_record, _fail, _interpret, assess
     if not is_uuid(execution_id):
         return _base(error="invalid_execution_id", status="unknown")
-    store = _ledger(workspace)
-    with observation_lock(store, observe_only):
+    store = _locked_store if _locked_store is not None else _ledger(workspace)
+    # prepare_execution already owns the same ledger lock; use the identical
+    # settlement path without acquiring a second non-reentrant Windows lock.
+    with nullcontext() if _locked_store is not None else observation_lock(store, observe_only):
         from grokbot_mcp.ledger_archive import archived
         if archived(workspace.root, execution_id, execution=True):
             return _base(execution_id=execution_id, status="archived", error="archived_task")

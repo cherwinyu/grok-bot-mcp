@@ -35,6 +35,37 @@ Advisory checks every registered protected/forbidden path against the current HE
 
 For bounded, opt-in expansion within the existing registered file policy, local Routine consistency checks and the sole supported ledger-archiving recovery path, see the [whole-repository guide](advisory-workspaces.md) / [整仓指南](advisory-workspaces.zh-CN.md). Manual ledger deletion is prohibited; archiving never authorizes retries or weakens frozen evidence. Administrator commands are local interfaces, not proof of OS administrator identity.
 
+## Prefix ceiling and frozen task grants
+
+An optional `prefix_ceiling` uses the same literal prefix/extension normalization
+as `allowed_prefixes`. Each active entry must fit inside one ceiling entry: its
+prefix equals or descends from that entry and its extensions are a subset.
+Exact `allowed_files` exceptions remain independent of the ceiling; all existing
+forbidden/protected checks still apply. An empty active list grants no prefixes.
+
+With a ceiling, the fingerprint covers the ceiling instead of active prefixes.
+Changing the ceiling, forbidden or protected policy still requires updated Routine
+text and explicit binding confirmation. Expanding or shrinking active prefixes
+within the ceiling does not require repasting the Routine. Preparation freezes
+`active_prefixes` in the manifest. Claims recheck that snapshot against the current
+ceiling and return it with `active_prefixes_sha256`; execution evidence uses that
+frozen grant even if the registry's active prefixes later change. Shrinking active
+prefixes therefore affects future tasks, not already prepared grants. A changed
+ceiling can refuse an outstanding claim, and existing policy identity checks remain.
+
+The administrator CLI previews changes by default. `--apply` creates a same-directory
+backup, atomically replaces the registry, then appends a policy audit event. The
+registry update and audit append are separate filesystem operations: a crash can
+leave a backup or a committed update without its audit line. Audit is retrospective
+traceability, not a gate or authorization; `policy_audit_write_failed` reports an
+already applied registry update. No credentials, bindings or switches are changed.
+These application checks are not an OS sandbox.
+
+前缀上限与禁区仍需更新并重粘 Routine、明确确认绑定；上限内的生效前缀扩缩不需重粘。
+manifest 冻结当时的授权，claim 再校验其属于当前上限，结果核对仍使用冻结快照。
+收缩生效前缀只影响后续任务，不撤销已准备任务；精确文件例外保持原语义且不能绕过禁区。
+审计日志是事后追溯手段，不是闸门；注册表替换与审计追加不构成跨文件原子事务。这不是 OS 沙箱。
+
 ## Credential boundaries
 
 The validate target is never used as the execute key, and the reverse is also refused. The repository contains no credential value. Setup prompts do not echo the key and do not write it to a project file.

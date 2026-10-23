@@ -11,7 +11,7 @@ from typing import Callable
 from grokbot_mcp.credentials.windows import CredentialError
 from grokbot_mcp.errors.http_errors import diagnosis_for_outcome
 from grokbot_mcp.manifest.store import ManifestError, load_manifest
-from grokbot_mcp.security.prefixes import manifest_scope_valid, resolve_task_files, policy_allows
+from grokbot_mcp.security.prefixes import manifest_scope_valid, resolve_task_files, policy_allows, manifest_workspace, active_prefix_fields
 from grokbot_mcp.registry import Workspace, policy_fingerprint
 from grokbot_mcp.routine import routine_readiness
 from grokbot_mcp.execution.evidence import verify_evidence
@@ -98,9 +98,18 @@ def _recover(store: JsonLedger) -> None:
 
 
 def _in_flight(record: dict[str, object]) -> bool:
+    if record.get("terminal"):
+        return False
     if record.get("submission_state") in IN_FLIGHT_SUBMISSION:
         return True
     return record.get("execution_state") in IN_FLIGHT_EXECUTION
+
+
+def stale_execution_records(workspace: Workspace) -> list[str]:
+    """Read-only hint: no lock files or ledger transitions."""
+    return sorted(str(r["execution_id"]) for r in _ledger(workspace).list_records()
+                  if _in_flight(r) and is_uuid(r.get("execution_id"))
+                  and (_bridge(workspace) / "results_execute" / (r["execution_id"] + ".json")).exists())
 
 
 def _sibling_has(execution_id: str, sibling_roots: list[Path]) -> bool:
@@ -122,6 +131,10 @@ def assess(workspace: Workspace, task_id: str, *, check_workspace: bool = True) 
         return {"ok": False, "error": "not_prepared", "manifest_sha256": digest, "document": document}
     if list(document.get("forbidden_files") or []) != list(workspace.forbidden_files):
         return {"ok": False, "error": "forbidden_mismatch", "manifest_sha256": digest, "document": document}
+    try:
+        manifest_workspace(workspace, document)
+    except ManifestError as exc:
+        return {"ok": False, "error": exc.code, "manifest_sha256": digest, "document": document}
     allowed = document.get("allowed_files")
     command = workspace.command(str(document.get("test_command_id")))
     if (document.get("task_id") != task_id or document.get("manifest_task_id") != task_id
@@ -212,12 +225,20 @@ def prepare_execution(workspace: Workspace, task_id: str, sibling_roots: list[Pa
                 **_protected_fields(report),
             )
         _recover(store)
+        from grokbot_mcp.execution.status import observe_execution
+        for record in store.list_records():
+            identity = record.get("execution_id")
+            if (_in_flight(record) and is_uuid(identity)
+                    and (_bridge(workspace) / "results_execute" / (identity + ".json")).exists()):
+                observe_execution(workspace, identity, _locked_store=store)
         records = store.list_records()
         for record in records:
             if record.get("manifest_task_id") == task_id:
                 return _base(execution_id=record.get("execution_id"), manifest_task_id=task_id, error="duplicate_execution")
             if _in_flight(record):
-                return _base(manifest_task_id=task_id, error="concurrent_execution")
+                return _base(manifest_task_id=task_id, error="concurrent_execution",
+                             blocking_execution_id=record.get("execution_id"),
+                             operator_message="An execution is still in flight; observe its original ID, never resend. / 仍有执行在途；请查询该执行 ID，不要重发。")
         execution_id = str(uuid.uuid4())
         if _sibling_has(execution_id, sibling_roots):
             return _base(manifest_task_id=task_id, error="execution_id_reused")
@@ -227,7 +248,7 @@ def prepare_execution(workspace: Workspace, task_id: str, sibling_roots: list[Pa
         try:
             snapshot = capture_snapshot(
                 workspace.root, watched, include_ignored=workspace.git_gate != "advisory",
-                **prefix_snapshot_options(workspace),
+                **prefix_snapshot_options(workspace, document),
             )
             baseline_sha = write_snapshot(_bridge(workspace) / "execution_baselines", execution_id, snapshot)
         except ValueError as exc:
@@ -391,7 +412,7 @@ def claim_execution(workspace: Workspace, execution_id: str, sibling_roots: list
             try:
                 snapshot = capture_snapshot(
                     workspace.root, watched, include_ignored=workspace.git_gate != "advisory",
-                    **prefix_snapshot_options(workspace),
+                    **prefix_snapshot_options(workspace, document),
                 )
             except ValueError as exc:
                 return {"ok": False, "error": str(exc)}
@@ -412,6 +433,7 @@ def claim_execution(workspace: Workspace, execution_id: str, sibling_roots: list
         creates = document.get("scope_expansion", {}).get("create_files")
         target_check = "prospective" if creates else "present"
         payload = {
+            **active_prefix_fields(workspace, document),
             "schema_version": 2,
             "workspace_id": workspace.workspace_id,
             "machine": workspace.expected_machine,
@@ -455,6 +477,7 @@ def claim_execution(workspace: Workspace, execution_id: str, sibling_roots: list
         store.update(execution_id, execution_claim_state="claimed", claimed_at=payload["claimed_at"], claim_sha256=sha256_bytes(raw))
         return {
             "ok": True,
+            **active_prefix_fields(workspace, document),
             "error": None,
             "execution_id": execution_id,
             "manifest_task_id": task_id,
@@ -526,7 +549,8 @@ def _interpret(
 
     allowed_keys = {match_path(name) for name in allowed}
     delta_keys = {match_path(name) for name in delta}
-    reported = _reported_files(parsed.get("changed_files"), workspace, advisory=workspace.git_gate == "advisory")
+    frozen_workspace = manifest_workspace(workspace, document)
+    reported = _reported_files(parsed.get("changed_files"), frozen_workspace, advisory=workspace.git_gate == "advisory")
     forbidden = set(workspace.forbidden_files)
     protected_change = any(_blocked(name, forbidden, advisory=workspace.git_gate == "advisory") for name in delta)
     protected_report = reported is not None and any(_blocked(name, forbidden, advisory=workspace.git_gate == "advisory") for name in reported)
