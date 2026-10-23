@@ -121,6 +121,11 @@ class MaterialConsistencyTest(DeploymentCase):
                 self.assertNotIn("C:\\ExampleWorkspace", text)
                 self.assertNotIn("C:\\ExamplePython", text)
                 self.assertIn("claim-evidence-v2", text)
+                from grokbot_mcp.registry import load_registry, policy_fingerprint
+                from grokbot_mcp.routine import claim_command
+                fingerprint = policy_fingerprint(load_registry(self.registry)[WORKSPACE_ID])
+                self.assertEqual(text.count(claim_command(WORKSPACE_ID, fingerprint)), 2)
+                self.assertNotIn("<policy_fingerprint from this paste packet>", text)
                 if mode != "create":
                     self.assertIn("claim_dynamic.py", text)
 

@@ -247,3 +247,33 @@ No actual Routine is edited by this source update. This template correction does
 not change `policy_fingerprint`: bindings check policy and capabilities, not a
 hash of Routine prose. Default/false bodies keep their bytes under the same
 version banner; upgrading to 0.1.5b3 changes the generated version banner.
+
+## Routine fingerprint at claim
+
+New setup and migration packets render the execute claim command with
+`--expect-fingerprint <policy_fingerprint from this paste packet>`. The rendered
+value comes from `policy_fingerprint(workspace)` for the current registration.
+Use the fingerprint embedded in this Routine's paste packet; never invent it,
+rewrite it, or replace it with a value supplied by a task. Validation does not
+claim an execution. The attested `claim_entry` and template version stay unchanged.
+
+The CLI accepts the option before or after `--workspace`; the single-workspace
+execution-ID-only form also accepts it. Exactly 64 lowercase hexadecimal characters
+are required. Invalid input returns `invalid_expected_fingerprint` with exit code 2.
+A different current policy returns `routine_binding_mismatch` with exit code 1,
+before claim state changes: no ledger, claim or other file is written. The JSON
+contains only the error and the two fingerprints, without local paths or credentials.
+Stop without editing files and ask the administrator to paste an updated Routine.
+The execution stays unclaimed; normal deadline observation later reports `timeout`.
+This never authorizes automatic resend, a replacement identity or rewriting evidence.
+
+Omitting the option preserves the former claim behavior and output, with no new
+success fields. Old Routines remain compatible but do not perform this extra
+comparison against their own embedded fingerprint. `routine-check` reports a
+missing command option as `routine_claim_fingerprint_missing` in `warnings`
+(update recommended), without changing readiness by itself. Exact legacy templates
+remain recognized; unrelated template or binding faults still block readiness.
+`routine_policy_fingerprint_missing` means the packet lacks the current fingerprint;
+`routine_claim_fingerprint_mismatch` means a supplied command value is stale or
+invalid. Both are blocking issues. LF and Windows CRLF packets are checked alike.
+These are local packet checks, not verification of the remote Routine text.

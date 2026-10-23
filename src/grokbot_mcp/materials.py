@@ -4,6 +4,7 @@ from importlib.resources import files
 from pathlib import Path
 from grokbot_mcp import __version__
 from grokbot_mcp.identity import TEMPLATE_VERSION
+from grokbot_mcp.routine import claim_command, FINGERPRINT_PLACEHOLDER
 
 
 def ps(value: str) -> str:
@@ -11,7 +12,8 @@ def ps(value: str) -> str:
 
 
 def render_routine(phase: str, *, workspace_root: Path, workspace_id: str,
-                   registry: Path, python: Path, mode: str, test_options: dict | None = None) -> str:
+                   registry: Path, python: Path, mode: str, test_options: dict | None = None,
+                   expected_fingerprint: str | None = None) -> str:
     if phase not in {"validate", "execute"} or mode not in {"create", "reuse", "migrate"}:
         raise ValueError("invalid_routine_phase")
     package = files("grokbot_mcp").joinpath("templates")
@@ -19,8 +21,10 @@ def render_routine(phase: str, *, workspace_root: Path, workspace_id: str,
     if mode != "create":
         text = text.replace("Create one long-lived routine", "Use the existing long-lived routine")
         text = text.replace("Create a second long-lived routine.", "Use the existing execute routine; do not create a duplicate.")
-    claim = "$env:GROKBOT_MCP_REGISTRY = " + ps(str(registry)) + "\n& " + ps(str(python)) + " -I -X utf8 -m grokbot_mcp.claim_cli --workspace " + workspace_id + " <execution_id>"
-    text = text.replace("C:\\ExamplePython\\python.exe -m grokbot_mcp.claim_cli --workspace example-workspace <execution_id>", claim)
+    fingerprint = expected_fingerprint or (test_options or {}).get("policy_fingerprint", FINGERPRINT_PLACEHOLDER)
+    claim = ("$env:GROKBOT_MCP_REGISTRY = " + ps(str(registry)) + "\n& " + ps(str(python))
+             + " -I -X utf8 -m " + claim_command(workspace_id, fingerprint))
+    text = text.replace("C:\\ExamplePython\\python.exe -m " + claim_command("example-workspace"), claim)
     text = text.replace("Replace `C:\\ExamplePython\\python.exe` and `example-workspace` with your install and registry id.",
                         "Use the explicit interpreter and registry selected in this packet; use only the received execution ID.")
     text = text.replace("C:\\ExampleWorkspace", str(workspace_root))

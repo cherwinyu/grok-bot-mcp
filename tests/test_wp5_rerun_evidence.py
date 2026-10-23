@@ -307,13 +307,29 @@ class TemplateTest(unittest.TestCase):
         self.assertEqual(self.render(workspace, "validate"), self.render(replace(workspace, require_test_output=False), "validate"))
 
     def test_false_and_omitted_preserve_fixed_legacy_bytes(self):
+        from grokbot_mcp.routine import CLAIM_GUIDANCE, claim_command
         from tests.test_u3_prefixes import workspace
         original = workspace()
+        expected = {"validate": "91c6d72f05f6c65a0282dcda05fb6321ce321f4dcb4b6fbec4fe30c80dc7a9cd",
+                    "execute": "ec6bd97b5b0ff4f3a704d26e6b153c8ca0d2f20fcc904311b0711477b20abbfe"}
         with patch("grokbot_mcp.materials.__version__", "0.1.4b1"):
             for ws in (original, replace(original, require_test_output=False)):
-                self.assertEqual(hashlib.sha256(self.render(ws).encode("utf-8")).hexdigest(),
-                                 "ec6bd97b5b0ff4f3a704d26e6b153c8ca0d2f20fcc904311b0711477b20abbfe")
-                self.assertNotIn("tests.output_sha256", self.render(ws))
+                for phase, digest in expected.items():
+                    text = self.render(ws, phase)
+                    fingerprint_option = " --expect-fingerprint " + policy_fingerprint(ws)
+                    guidance_block = CLAIM_GUIDANCE + "\n\n"
+                    command_count = 1 if phase == "execute" else 0
+                    self.assertEqual(text.count(fingerprint_option), command_count)
+                    self.assertEqual(text.count(claim_command("example-workspace", policy_fingerprint(ws))),
+                                     command_count)
+                    self.assertEqual(text.count(CLAIM_GUIDANCE), 1)
+                    self.assertEqual(text.count(guidance_block), 1)
+                    self.assertNotIn("tests.output_sha256", text)
+                    # Exclude only the new claim option and guidance; all
+                    # remaining template bytes keep their pinned legacy hashes.
+                    text = text.replace(fingerprint_option, "", command_count)
+                    text = text.replace(guidance_block, "", 1)
+                    self.assertEqual(hashlib.sha256(text.encode("utf-8")).hexdigest(), digest)
 
     def test_policy_fingerprint_does_not_depend_on_template_text(self):
         workspace = _workspace(entry(require_test_output=True))

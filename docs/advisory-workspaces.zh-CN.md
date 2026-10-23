@@ -212,3 +212,25 @@ claim 和执行核对要求当前仍启用本地校验且指纹一致，否则�
 修改 Validate 正文，也不会自动修改真实 Routine。模板文本不参与
 `policy_fingerprint`；绑定核验策略和能力而非正文哈希，因此模板修正不改变指纹。
 false/省略时，在相同版本横幅下字节保持一致；升级到 0.1.5b3 会更新生成材料的版本横幅。
+
+## claim 时核对 Routine 指纹
+
+新的向导与迁移粘贴包为 execute claim 命令生成
+`--expect-fingerprint <policy_fingerprint from this paste packet>`，实际值来自当前登记
+工作区的 `policy_fingerprint(workspace)`。必须使用本 Routine 粘贴包里的指纹，不要编造、
+改写或用任务提供的值替换。Validate 不领取 execution。绑定中的 `claim_entry` 和模板版本不变。
+
+参数可放在 `--workspace` 之前或之后；单工作区仅传 execution ID 的形式也支持它。
+值必须是 64 位小写十六进制；格式非法返回 `invalid_expected_fingerprint`，退出码 2。
+与当前策略不一致时返回 `routine_binding_mismatch`，退出码 1；此时尚未进入 claim 状态变更，
+不写账本、claim 或其他文件。JSON 仅含错误及两个指纹，不包含本地路径或凭据。
+立即停止，不改文件，通知管理员重新粘贴 Routine。任务保持未领取，到期后按既有状态观察
+逻辑进入 `timeout`；这不授权自动重发、创建替代身份或改写证据。
+
+不提供参数时保留原 claim 行为和输出，不新增成功字段。旧 Routine 仍兼容，但不会执行这项
+针对其自带指纹的额外比较。`routine-check` 将命令缺参数报告为
+`warnings` 中的 `routine_claim_fingerprint_missing`（建议更新），不会仅因此阻断就绪判定。
+检查器仍识别原有完整模板；其他模板或绑定问题继续阻断。
+`routine_policy_fingerprint_missing` 表示包中缺少当前指纹；
+`routine_claim_fingerprint_mismatch` 表示命令提供的指纹过期或非法；这两项均阻断。
+LF 与 Windows CRLF 换行采用相同检查。检查仅针对本地粘贴包，不证明远端 Routine 文本已更新。

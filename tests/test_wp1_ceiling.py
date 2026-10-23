@@ -114,6 +114,14 @@ class CeilingContractTest(unittest.TestCase):
                 text = render_routine(phase, workspace_root=Path("D:/fictional/workspace"),
                     workspace_id="example-workspace", registry=Path("D:/fictional/registry.json"),
                     python=Path("D:/fictional/python.exe"), mode="reuse", test_options=routine_profile(workspace()))
+                from grokbot_mcp.routine import CLAIM_GUIDANCE, claim_command
+                self.assertIn(CLAIM_GUIDANCE, text)
+                if phase == "execute":
+                    self.assertIn(claim_command("example-workspace", policy_fingerprint(workspace())), text)
+                # Only the new claim option/guidance is excluded from the
+                # pinned legacy bytes; all other template text stays frozen.
+                text = text.replace(" --expect-fingerprint " + policy_fingerprint(workspace()), "")
+                text = text.replace(CLAIM_GUIDANCE + "\n\n", "")
                 self.assertEqual(hashlib.sha256(text.encode("utf-8")).hexdigest(), digest)
         self.assertIn("active_prefixes_sha256", files("grokbot_mcp").joinpath(
             "templates", "prefix-policy.md").read_text(encoding="utf-8"))
