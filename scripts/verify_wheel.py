@@ -9,9 +9,16 @@ import shutil
 import subprocess
 import sys
 import tempfile
-import tomllib
 import venv
 from pathlib import Path
+
+if __package__:
+    from .source_version import source_version
+else:
+    try:
+        from source_version import source_version
+    except ModuleNotFoundError:
+        from scripts.source_version import source_version
 
 
 def main() -> int:
@@ -25,7 +32,7 @@ def main() -> int:
     root = Path(__file__).resolve().parents[1]
     wheelhouse, output = args.wheelhouse.resolve(), args.output.resolve()
     output.mkdir(parents=True, exist_ok=True)
-    version = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))["project"]["version"]
+    version = source_version(root)
     wheel = next(wheelhouse.glob("grokbot_mcp_bridge-" + version + "-*.whl"))
     env = {key: value for key, value in os.environ.items() if key not in {"PYTHONPATH", "PYTHONUTF8", "GROKBOT_MCP_REGISTRY"}}
     with tempfile.TemporaryDirectory(prefix="bridge-wheel-") as name:
@@ -47,6 +54,7 @@ def main() -> int:
             "assert p.is_relative_to(pathlib.Path(sys.prefix).resolve()),p; "
             "assert m.version('mcp')=='2.3.0'; "
             f"assert grokbot_mcp.__version__=={version!r}; "
+            "assert m.version('grokbot-mcp-bridge')==grokbot_mcp.__version__; "
             "print('INSTALLED_WHEEL_IMPORT_VERIFIED')"
         )
         subprocess.run([str(python), "-I", "-c", check], cwd=sandbox, env=env, check=True)

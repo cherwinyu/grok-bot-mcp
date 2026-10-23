@@ -135,6 +135,8 @@ def preflight(workspace_id: str) -> dict[str, object]:
     except TargetRejected as exc:
         local_error = exc.code
     local_ready = local_error is None
+    from grokbot_mcp.registry_check import check_workspace
+    test_command_check = check_workspace(workspace)["summary"]
     bindings = {phase: routine_readiness(workspace, phase) for phase in ("validate", "execute")}
     blocking = []
     if not local_ready:
@@ -177,6 +179,7 @@ def preflight(workspace_id: str) -> dict[str, object]:
         "qa_accepted": False,
         "ready": ready,
         "local_ready": local_ready,
+        "test_command_check": test_command_check,
         "binding_confirmed": confirmed,
         "remote_binding_verified": False,
         "submit_permitted": ready,

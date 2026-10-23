@@ -7,6 +7,7 @@ import hashlib
 import os
 import subprocess
 import textwrap
+import tempfile
 from pathlib import Path
 
 from grokbot_mcp.credentials.backend import install_backend
@@ -18,6 +19,15 @@ WORKSPACE_ID = "example-workspace"
 MACHINE = "EXAMPLE-PC"
 VALIDATE = "grokbot-mcp/example-workspace/validate"
 EXECUTE = "grokbot-mcp/example-workspace/execute"
+
+
+def temporary_directory(*, prefix: str = "tmp") -> tempfile.TemporaryDirectory:
+    """Own a disposable fixture; use with or register cleanup with addCleanup.
+
+    The optional parent must already exist. Keep tempfile's default permissions
+    and system-temp behavior; never relax permissions to make a test pass.
+    """
+    return tempfile.TemporaryDirectory(prefix=prefix, dir=os.environ.get("GROKBOT_TEST_TMPDIR") or None)
 
 
 class MemoryCredentials:

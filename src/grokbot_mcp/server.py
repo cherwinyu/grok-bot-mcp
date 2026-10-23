@@ -89,7 +89,14 @@ def grok_prepare_task(
     allowed_globs: list[str] | None = None,
     create_files: list[str] | None = None,
 ) -> dict:
-    """Write one local manifest. The server owns the root, id, and file policy."""
+    """Write one local manifest. The server owns the root, id, and file policy.
+
+    Pass execution_timeout=N (seconds) to set this task's remote deadline.
+    It must be a positive integer at or below the registered command's
+    timeout_cap, which cannot exceed the global ceiling of 3600 seconds.
+    Omit it to use the command's default_timeout (at or below timeout_cap).
+    Newly registered code-test commands default to 3600 seconds.
+    """
     return facade.prepare_task(
         workspace_id,
         task_type,

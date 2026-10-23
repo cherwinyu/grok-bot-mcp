@@ -17,6 +17,22 @@
 
 登记路径、测试命令及文件必须对应管理员审核过的实际项目。不要未经审核把示例粘入真实 registry。U1 的路径规范化、编码、安全错误码及 4 MiB JSON 上限集中在[加固说明](hardening.zh-CN.md)。
 
+## 三层超时
+
+桥的全局硬上限为 3600 秒。管理员在此范围内为每条命令登记 `timeout_cap`
+和 `default_timeout`，满足 `1 <= default_timeout <= timeout_cap <= 3600`。
+向导新登记的代码测试命令两者默认均为 3600；`none` / read_only 命令仍为 180。
+现有登记不会自动升级。这些登记值参与策略指纹，修改后需要重新审核绑定。
+
+单次任务由 Director 通过 `grok_prepare_task(execution_timeout=N, ...)` 指定，
+N 必须是正整数且不超过该命令的 `timeout_cap`；省略时使用 `default_timeout`。
+它决定从已记录请求尝试时间起算的整次远端任务截止时间，并非仅测试子进程的超时。
+桥本机复跑另用 `timeout_seconds`，允许 1～3600 秒，缺省仍为 600。
+
+`timeout` 仍是未解决状态，工作区继续被占用并阻止冲突任务。超时不授权重发；
+同一已 claim 执行的合法迟到结果仍可核验。Grok 平台单次运行时长上限尚未核实，
+桥的上限不能证明平台的上限。
+
 ## 受限目录展开
 
 `grok_prepare_task` 增加可选 `allowed_globs`，例如 `["src/**/*.py", "docs/**"]`。继续传入 `allowed_files`（全部用 glob 选择时传 `[]`）、测试命令 ID 及原有必填参数。仅接受 `dir/**` 和 `dir/**/*.ext`，目录前缀与扩展名必须是字面量。绝对路径、盘符、反斜杠、遍历、空或点路径段、字符类、其它通配符、第二个或位置不合规的 `**` 均拒绝。
@@ -234,3 +250,17 @@ false/省略时，在相同版本横幅下字节保持一致；升级到 0.1.5b3
 `routine_policy_fingerprint_missing` 表示包中缺少当前指纹；
 `routine_claim_fingerprint_mismatch` 表示命令提供的指纹过期或非法；这两项均阻断。
 LF 与 Windows CRLF 换行采用相同检查。检查仅针对本地粘贴包，不证明远端 Routine 文本已更新。
+
+## 测试命令登记的只读检查
+
+运行 `python -B -m grokbot_mcp.admin_cli registry-check --registry <registry.json>`；
+加 `--workspace <id>` 可只检查一个工作区。JSON 对登记的 `argv` 和 `rerun.argv`
+各项检查返回 `ok`、`missing` 或 `unchecked`，并附稳定错误码和命令 ID。检查内容为
+cwd、登记根内的显式可执行文件路径、unittest 模块文件/包及显式测试文件；
+`rerun.env.PYTHONPATH` 中相对 cwd 的目录作为额外模块根。
+
+这是文件系统提示，不是测试运行或导入解析保证。裸命令名、不支持的参数及根外路径
+保持未检查。不搜索 PATH、不导入目标、不启动子进程、不访问凭据、不更改开关；
+禁区、保护路径与链接会被拒绝。无效登记（包括加载时 rerun cwd 已失效）仍保留
+原有加载拒绝行为。`grok_preflight.test_command_check` 附加检查项总数、缺失数及
+缺失命令 ID/错误码，不改变 `local_ready`，不授权发送。

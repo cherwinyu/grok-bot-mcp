@@ -16,6 +16,9 @@ def main(argv=None) -> int:
         archive.add_argument("--confirm", action="store_true")
         archive.add_argument("--accept-late-result-risk", action="store_true")
         check = commands.add_parser("routine-check")
+        registry_check = commands.add_parser("registry-check")
+        registry_check.add_argument("--registry", required=True, type=Path)
+        registry_check.add_argument("--workspace")
         prefixes = commands.add_parser("registry-prefixes")
         prefixes.add_argument("--write-to", type=Path)
         prefixes.add_argument("--add", action="append", default=[])
@@ -29,6 +32,9 @@ def main(argv=None) -> int:
             from grokbot_mcp.ledger_archive import archive as run
             result = run(args.registry, args.workspace, args.task_id, reason=args.reason,
                          confirm=args.confirm, accept_late_result_risk=args.accept_late_result_risk)
+        elif args.operation == "registry-check":
+            from grokbot_mcp.registry_check import check as run
+            result = run(args.registry, args.workspace)
         elif args.operation == "registry-prefixes":
             from grokbot_mcp.registry_prefixes import preview, change
             if args.add or args.remove or args.apply:
