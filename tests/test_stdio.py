@@ -6,6 +6,8 @@ import os
 import unittest
 from pathlib import Path
 
+from tests.support import temporary_directory
+
 from tests.support import WORKSPACE_ID, make_workspace
 
 
@@ -22,7 +24,7 @@ class StdioTest(unittest.TestCase):
             async def run() -> list[str]:
                 params = StdioServerParameters(
                     command=python,
-                    args=["-m", "grokbot_mcp.server"],
+                    args=["-B", "-m", "grokbot_mcp.server"],
                     env={**os.environ, "GROKBOT_MCP_REGISTRY": registry},
                 )
                 async with stdio_client(params) as (read_stream, write_stream):
@@ -55,9 +57,9 @@ class StdioTest(unittest.TestCase):
         )
 
     def _workspace(self):
-        import tempfile
-
-        return _Workspace(tempfile.TemporaryDirectory())
+        directory = temporary_directory()
+        self.addCleanup(directory.cleanup)
+        return _Workspace(directory)
 
 
 class _Workspace:

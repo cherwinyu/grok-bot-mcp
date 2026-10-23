@@ -478,7 +478,12 @@ class NativeRerunTest(unittest.TestCase):
         if handle:
             try:
                 code = ctypes.c_ulong()
-                self.assertTrue(kernel.GetExitCodeProcess(handle, ctypes.byref(code)))
+                import time
+                for attempt in range(6):
+                    self.assertTrue(kernel.GetExitCodeProcess(handle, ctypes.byref(code)))
+                    if code.value != 259 or attempt == 5:
+                        break
+                    time.sleep(0.2)
                 self.assertNotEqual(code.value, 259)
             finally:
                 kernel.CloseHandle(handle)
