@@ -43,7 +43,7 @@ Call `grok_submit_validation` with `{"workspace_id":"demo-workspace","task_id":"
 
 A successful HTTP acceptance fragment is `{"accepted":true,"http_status":200,"task_state":"accepted","qa_accepted":false}`. It means the request was accepted, **not** that validation ran or passed. The validate Routine must check the actual manifest/workspace and write its proof without modifying code.
 
-If the response says `unknown_submission`, `submission_started`, timeout, or retry forbidden, do not submit again, manufacture a new ID, or delete the ledger. Check the same task in Grok Bot and query it locally. A switch-blocked call that explicitly never attempted submission is different; follow its exact diagnostic rather than guessing.
+If the response says `unknown_submission`, `submission_started`, timeout, or retry forbidden, do not submit again, manufacture a new ID, or manually delete the ledger. Check the same task in Grok Bot and query it locally. A switch-blocked call that explicitly never attempted submission is different; follow its exact diagnostic rather than guessing. The only supported ledger-archiving recovery path is [ledger-archive](advisory-workspaces.md#failure-and-audited-recovery).
 
 ## Observe and synchronize the successful validation
 

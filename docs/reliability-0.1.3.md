@@ -159,7 +159,7 @@ incomplete-ledger cases fail closed. It shares the execution lock with dispatch
 and claim, preserves the ledger/baseline/proof, and records a permanent `cancelled`
 state and timestamp. Repeated cancellation is idempotent; late files cannot revive
 it. After cancellation, confirm the binding and explicitly create a NEW task; the
-cancelled ID is not recycled. Never delete ledger records to recover or retry.
+cancelled ID is not recycled. Never manually delete ledger records to recover or retry. The sole supported ledger-archiving recovery path is [ledger-archive](advisory-workspaces.md#failure-and-audited-recovery); it does not authorize retries.
 
 ### Upgrade boundary
 

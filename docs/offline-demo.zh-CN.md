@@ -43,7 +43,7 @@
 
 HTTP 接收成功的片段为 `{"accepted":true,"http_status":200,"task_state":"accepted","qa_accepted":false}`。这只表示请求被接收，**不表示校验已执行或通过**。校验 Routine 仍需检查实际任务与工作区，在不改代码的条件下写入 proof。
 
-出现 `unknown_submission`、`submission_started`、超时或禁止重复提交时，不要重发、换新标识重复执行或删除账本。到 Grok Bot 检查同一任务，并在本机查询它。因开关关闭而明确从未尝试发送的调用属于另一种情况，应遵循对应诊断，不能凭猜测重试。
+出现 `unknown_submission`、`submission_started`、超时或禁止重复提交时，不要重发、换新标识重复执行或手工删除账本。到 Grok Bot 检查同一任务，并在本机查询它。因开关关闭而明确从未尝试发送的调用属于另一种情况，应遵循对应诊断，不能凭猜测重试。唯一受支持的账本归档恢复路径是 [ledger-archive](advisory-workspaces.zh-CN.md#故障与有审计的恢复)。
 
 ## 查询并同步成功校验到账本
 

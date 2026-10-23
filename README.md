@@ -39,6 +39,8 @@ Workspace registrations may set `"git_gate": "advisory"`; omission remains byte-
 
 This trade-off supports multiple agents sharing one checkout, but the bridge cannot determine which concurrent writer owns a change. Operators must review Git history and diffs themselves. Reads outside the declared scope are not detectable, and advisory mode is not an OS sandbox.
 
+[Whole-repository advisory guide](docs/advisory-workspaces.md): configuration and workflow, opt-in `allowed_globs` / `allow_globs`, local `routine-check`, and audited `ledger-archive`. [Test policy and evidence](docs/test-evidence-git-review.md) defines `applies_to`, `argv`, `test_selection`, `require_test_output`, `other_prefixes` and `git_review`; [hardening](docs/hardening.md) defines path normalization, bounded JSON and safe tool errors. All options preserve their existing defaults; the seven MCP tools and package version remain unchanged.
+
 ## Where execution actually happens
 
 ~~~text
@@ -120,7 +122,7 @@ $utf8 = New-Object System.Text.UTF8Encoding $false
 
 Replace the here-string with the measured result. Continue with `--stage` and `--publish` as in [result writing](routines/result-writing.md). New manifests include `constraint_version`. Historical manifests that omit it stay verifiable. Do not require the manifest to equal the current constraint prose.
 
-This repository does not host a host-side scope-correction framework. Failed receipts stay. Do not delete them or allocate a new id to resend the same submission.
+This repository does not host a host-side scope-correction framework. Failed receipts stay. Do not manually delete them or allocate a new id to resend the same submission. The only supported ledger-archiving recovery path is [ledger-archive](docs/advisory-workspaces.md#failure-and-audited-recovery).
 
 | Failure | What this bridge does | Entry in this repository |
 |---|---|---|

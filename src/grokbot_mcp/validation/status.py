@@ -20,6 +20,9 @@ def observe_validation(workspace, task_id: str, *, observe_only=False, verify_cu
         return {**result, "error": "invalid_task_id"}
     store = _ledger(workspace)
     with observation_lock(store, observe_only):
+        from grokbot_mcp.ledger_archive import archived
+        if archived(workspace.root, task_id):
+            return {**result, "status": "archived", "error": "archived_task"}
         try:
             record = store.read(task_id)
         except LedgerTooLarge:

@@ -2,6 +2,8 @@
 
 [English](test-evidence-git-review.md)
 
+[整仓指南](advisory-workspaces.zh-CN.md)说明如何将这些选项与受限目录展开、本地 Routine 预检、有审计的账本恢复组合使用。
+
 所有新增字段沿用 schema/protocol 版本 1，七个 MCP 签名不变。省略可选项时，strict 结果摘要、策略指纹及生成的 Routine 正文字节保持兼容；不会自动修改实际 registry、客户端、Routine 或开关。
 
 ## 按任务选择登记命令

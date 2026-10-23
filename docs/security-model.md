@@ -33,6 +33,8 @@ See [path normalization and bounded JSON](hardening.md) / [路径规范化与 JS
 
 Advisory checks every registered protected/forbidden path against the current HEAD at admission and claim, then compares the recorded hashes after claim. `.git` is not path-compared, and the bridge's own untracked `.bridge` runtime directory remains excluded. Git command failures, manifest allow-list validation, claim-once, identity, frozen-evidence and no-resend rules remain fail-closed. Advisory cannot attribute concurrent writes to an agent, cannot detect out-of-scope reads, and is not an OS sandbox. The operator must review Git history and diffs.
 
+For bounded, opt-in expansion within the existing registered file policy, local Routine consistency checks and the sole supported ledger-archiving recovery path, see the [whole-repository guide](advisory-workspaces.md) / [整仓指南](advisory-workspaces.zh-CN.md). Manual ledger deletion is prohibited; archiving never authorizes retries or weakens frozen evidence. Administrator commands are local interfaces, not proof of OS administrator identity.
+
 ## Credential boundaries
 
 The validate target is never used as the execute key, and the reverse is also refused. The repository contains no credential value. Setup prompts do not echo the key and do not write it to a project file.

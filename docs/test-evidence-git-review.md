@@ -2,6 +2,8 @@
 
 [简体中文](test-evidence-git-review.zh-CN.md)
 
+The [whole-repository guide](advisory-workspaces.md) composes these options with restricted directory expansion, local Routine checks and audited ledger recovery.
+
 All additions retain schema/protocol version 1 and the seven MCP signatures. Omitted options preserve strict result summaries, policy fingerprints and generated Routine text. No registry, client, Routine or switch is changed automatically.
 
 ## Registered test selection

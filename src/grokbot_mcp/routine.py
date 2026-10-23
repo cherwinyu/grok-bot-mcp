@@ -96,6 +96,9 @@ def migration_gate(workspace: Workspace) -> str | None:
     path = workspace.root / ".bridge/deployment_migration.json"
     try:
         from grokbot_mcp.local_safety import LocalError, read_document, safe_path
+        from grokbot_mcp.ledger_archive import incomplete
+        if incomplete(workspace.root):
+            return "archive_incomplete"
         from grokbot_mcp.security.paths import is_uuid
         safe_path(path)
         if not path.exists():

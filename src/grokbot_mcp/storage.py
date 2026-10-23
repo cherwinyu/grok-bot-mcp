@@ -89,6 +89,10 @@ class JsonLedger:
         return self.directory / f"{record_id}.json"
 
     def list_records(self) -> list[dict[str, object]]:
+        if self.directory.name in {"tasks_v2", "executions"}:
+            from grokbot_mcp.ledger_archive import incomplete
+            if incomplete(self.directory.parent.parent):
+                raise ValueError("archive_incomplete")
         records: list[dict[str, object]] = []
         if not self.directory.exists():
             return records
@@ -102,6 +106,7 @@ class JsonLedger:
         return records
 
     def read(self, record_id: str) -> dict[str, object]:
+        self._reject_archived(record_id)
         path = self.path_for(record_id)
         if not path.is_file():
             raise ValueError("missing")
@@ -109,7 +114,14 @@ class JsonLedger:
         return document
 
     def create(self, record_id: str, document: dict[str, object]) -> None:
+        self._reject_archived(record_id)
         write_json_new(self.path_for(record_id), document)
+
+    def _reject_archived(self, record_id: str) -> None:
+        if self.directory.name in {"tasks_v2", "executions"}:
+            from grokbot_mcp.ledger_archive import archived
+            if archived(self.directory.parent.parent, record_id, execution=self.directory.name == "executions"):
+                raise ValueError("archived_task")
 
     def update(self, record_id: str, **fields: object) -> dict[str, object]:
         document = self.read(record_id)

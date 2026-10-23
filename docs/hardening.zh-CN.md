@@ -2,6 +2,8 @@
 
 [English](hardening.md) · [安全模型](security-model.md) · [开发说明](development.md)
 
+可选目录选择与有审计的恢复见[整仓 advisory 指南](advisory-workspaces.zh-CN.md)。受限 glob 语法比一般策略路径规范化规则更严格。
+
 Advisory 登记的 allowed、forbidden、protected 路径使用同一共享函数：反斜杠转换为 `/`，折叠重复分隔符、前导 `./` 和内部 `..`，拒绝绝对路径及逃出根目录的路径。Advisory 比较一律 casefold，覆盖 Windows 和 `core.ignorecase=true` 的仓库；`private2` 不属于 `private`。准确文件检查仍保留实际拼写。Strict 路径处理及快照 JSON 序列化保留原行为。
 
 Advisory 快照解码 Git C 风格引号路径，将八进制转义先累积为字节，再按 UTF-8 解码。非法序列在解码器中保留原样，参与策略比较时拒绝。Ignored 条目仅保留 watched 路径范围内的内容。执行禁区判定使用同一规范化：登记禁区为 `private` 时，结果报告 `Private/secret.tmp` 仍为 scope_violation。结果 `changed_files` 比较先做 Unicode NFC，不猜测修复乱码字符。这仍是应用层检查，不是 OS 沙箱，也不能归属并发写入者。

@@ -15,6 +15,9 @@ def observe_execution(workspace, execution_id: str, *, observe_only=False, verif
         return _base(error="invalid_execution_id", status="unknown")
     store = _ledger(workspace)
     with observation_lock(store, observe_only):
+        from grokbot_mcp.ledger_archive import archived
+        if archived(workspace.root, execution_id, execution=True):
+            return _base(execution_id=execution_id, status="archived", error="archived_task")
         try:
             record = store.read(execution_id)
         except LedgerTooLarge:

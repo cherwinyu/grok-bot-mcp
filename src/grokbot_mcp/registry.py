@@ -52,6 +52,8 @@ class Workspace:
     test_selection: str = "warn"
     require_test_output: bool = False
     other_prefixes: tuple[str, ...] = ()
+    allow_globs: bool = False
+    glob_max_files: int = 200
 
     def command(self, command_id: str) -> TestCommand | None:
         for item in self.test_commands:
@@ -166,6 +168,10 @@ def _workspace(item: object) -> Workspace:
         raise RegistryError("registry_invalid")
     commands = _commands(item.get("test_commands"))
     selection = item.get("test_selection", "warn")
+    allow_globs = item.get("allow_globs", False)
+    glob_max_files = item.get("glob_max_files", 200)
+    if type(allow_globs) is not bool or type(glob_max_files) is not int or not 1 <= glob_max_files <= 2000:
+        raise RegistryError("registry_invalid")
     required_output = item.get("require_test_output", False)
     if selection not in ("warn", "reject") or type(required_output) is not bool:
         raise RegistryError("registry_invalid")
@@ -216,6 +222,8 @@ def _workspace(item: object) -> Workspace:
         test_selection=selection,
         require_test_output=required_output,
         other_prefixes=others,
+        allow_globs=allow_globs,
+        glob_max_files=glob_max_files,
     )
 
 
@@ -295,13 +303,15 @@ def command_options(command: TestCommand) -> dict:
 def workspace_options(workspace: Workspace) -> dict:
     return {**({"test_selection": workspace.test_selection} if workspace.test_selection != "warn" else {}),
             **({"require_test_output": True} if workspace.require_test_output else {}),
-            **({"other_prefixes": list(workspace.other_prefixes)} if workspace.other_prefixes else {})}
+            **({"other_prefixes": list(workspace.other_prefixes)} if workspace.other_prefixes else {}),
+            **({"allow_globs": True} if workspace.allow_globs else {}),
+            **({"glob_max_files": workspace.glob_max_files} if workspace.glob_max_files != 200 else {})}
 
 
 def workspace_profile(workspace: Workspace) -> dict:
     """Omit new defaults so existing generated materials retain their bytes."""
     value = asdict(workspace)
-    for key in ("test_selection", "require_test_output", "other_prefixes"):
+    for key in ("test_selection", "require_test_output", "other_prefixes", "allow_globs", "glob_max_files"):
         value.pop(key)
     value.update(workspace_options(workspace))
     for item, command in zip(value["test_commands"], workspace.test_commands):

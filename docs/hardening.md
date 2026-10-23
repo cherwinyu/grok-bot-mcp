@@ -2,6 +2,8 @@
 
 [简体中文](hardening.zh-CN.md) · [Security](security-model.md) · [Development](development.md)
 
+For opt-in directory selection and audited recovery, see the [whole-repository advisory guide](advisory-workspaces.md). Its restricted glob grammar is deliberately narrower than general policy-path normalization.
+
 Advisory registrations normalize allowed, forbidden and protected paths through one shared policy-path function. It converts backslashes, collapses repeated separators, leading `./` and internal `..`, and rejects absolute paths or traversal outside the root. Comparisons always use casefold in advisory mode, including Windows and Git repositories with `core.ignorecase=true`; `private2` is not a child of `private`. Actual spelling is retained for exact-file checks. Strict path handling and snapshot JSON serialization retain their existing behavior.
 
 Advisory snapshots decode Git C-quoted paths, accumulating octal bytes before UTF-8 decoding. Invalid sequences remain unchanged in the decoder and are rejected for policy comparison. Ignored paths are kept only under watched paths. Execution forbidden-path checks use the same normalization; a reported `Private/secret.tmp` is a scope violation when `private` is forbidden. Result `changed_files` comparisons use Unicode NFC without guessing or repairing corrupted characters. This is still an application-level check, not a sandbox or attribution of concurrent writes.

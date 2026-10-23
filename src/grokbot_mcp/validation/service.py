@@ -106,6 +106,12 @@ def submit_validation(
         return _result(task_id, error="result_already_exists", manifest_sha256=digest)
     store = _ledger(workspace)
     with store.locked():
+        # Recheck after locking: an administrator may have archived the task
+        # between the initial read and admission.
+        try:
+            load_manifest(workspace.root, task_id)
+        except ManifestError as exc:
+            return _result(task_id, error=exc.code)
         _recover(store)
         for record in store.list_records():
             if record.get("task_state") in BLOCKING:
@@ -128,6 +134,7 @@ def submit_validation(
                 "execution_timeout": document.get("execution_timeout", 600),
                 "result_path": result_rel,
                 "submission_final": False,
+                **({"scope_expansion": document["scope_expansion"]} if "scope_expansion" in document else {}),
             },
         )
         try:

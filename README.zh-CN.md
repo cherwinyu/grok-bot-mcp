@@ -39,6 +39,8 @@ $BridgePython = 'C:\ExampleBridgeBeta\Scripts\python.exe'
 
 该模式允许多个 Agent 共用一个 checkout，但 Bridge 无法判断并行改动归属，使用方必须自行复核 Git 历史与 diff。越界读取无法检测；advisory 也不是 OS 沙箱。
 
+[整仓 advisory 指南](docs/advisory-workspaces.zh-CN.md)集中说明配置与流程、可选 `allowed_globs` / `allow_globs`、本地 `routine-check` 和有审计的 `ledger-archive` 恢复。[测试策略与证据](docs/test-evidence-git-review.zh-CN.md)定义 `applies_to`、`argv`、`test_selection`、`require_test_output`、`other_prefixes`、`git_review`；[加固说明](docs/hardening.zh-CN.md)定义路径规范化、JSON 上限和安全工具错误。各选项保留原默认值，MCP 工具仍为七个，版本号不变。禁止手工删账本；唯一受支持的账本归档恢复路径为指南中的 `ledger-archive`。
+
 ## 云端与 Windows 的执行边界
 
 ~~~text
