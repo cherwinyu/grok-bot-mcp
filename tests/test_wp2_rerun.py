@@ -59,7 +59,7 @@ class ConfigTest(unittest.TestCase):
             cases.append(({**CONFIG, "cwd": cwd}, "rerun_cwd_forbidden"))
         for env in (None, [], {"lower": "x"}, {"1BAD": "x"}, {"A-B": "x"}, {"A": 1}, {"A": "\x00"}):
             cases.append(({**CONFIG, "env": env}, "rerun_env_invalid"))
-        for timeout in (True, False, None, "1", 0, -1, 1801, 1.5):
+        for timeout in (True, False, None, "1", 0, -1, 3601, 1.5):
             cases.append(({**CONFIG, "timeout_seconds": timeout}, "rerun_timeout_invalid"))
         for config, code in cases:
             with self.subTest(config=config), self.assertRaises(RegistryError) as caught:

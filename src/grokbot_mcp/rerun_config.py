@@ -81,7 +81,7 @@ def parse_rerun(value: object, *, root: Path | None = None,
                                    or type(v) is not str or "\x00" in v for k, v in env.items())):
         raise ValueError("rerun_env_invalid")
     timeout = value.get("timeout_seconds", 600)
-    if type(timeout) is not int or not 1 <= timeout <= 1800:
+    if type(timeout) is not int or not 1 <= timeout <= 3600:
         raise ValueError("rerun_timeout_invalid")
     if root is not None:
         resolve_cwd(root, cwd, forbidden, protected)
