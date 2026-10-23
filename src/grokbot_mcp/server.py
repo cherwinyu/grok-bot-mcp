@@ -3,15 +3,50 @@
 from __future__ import annotations
 
 import logging
+import inspect
+import json
 import sys
 
 logging.basicConfig(level=logging.WARNING, stream=sys.stderr, force=True)
 
 from mcp.server import MCPServer
+from mcp.types import CallToolResult, TextContent
 
 from grokbot_mcp import facade, __version__
+from grokbot_mcp.tool_errors import invalid_argument, internal_error
 
-mcp = MCPServer(
+
+class BridgeServer(MCPServer):
+    async def call_tool(self, name, arguments, context=None):
+        function = globals().get(name) if name in TOOL_NAMES else None
+        if function is not None:
+            signature = inspect.signature(function)
+            try:
+                bound = signature.bind(**arguments)
+                for key, value in bound.arguments.items():
+                    annotation = signature.parameters[key].annotation
+                    if annotation == "str" and type(value) is not str:
+                        raise TypeError
+                    if annotation == "bool" and type(value) is not bool:
+                        raise TypeError
+            except TypeError:
+                return _error_result(invalid_argument(list(signature.parameters)))
+        try:
+            return await super().call_tool(name, arguments, context)
+        except Exception as exc:
+            return _error_result(internal_error(exc))
+
+
+def _error_result(value):
+    return CallToolResult(content=[TextContent(type="text", text=json.dumps(value))],
+                          structured_content=value, is_error=True)
+
+
+TOOL_NAMES = frozenset({"grok_list_workspaces", "grok_preflight", "grok_prepare_task",
+                        "grok_submit_validation", "grok_prepare_execution",
+                        "grok_submit_execution", "grok_get_status"})
+
+mcp = BridgeServer(
     name="grokbot-mcp-bridge",
     version=__version__,
     instructions=(
@@ -49,6 +84,7 @@ def grok_prepare_task(
     test_command_id: str,
     execution_timeout: int | None = None,
     baseline_commit: str | None = None,
+    allowed_globs: list[str] | None = None,
 ) -> dict:
     """Write one local manifest. The server owns the root, id, and file policy."""
     return facade.prepare_task(
@@ -60,6 +96,7 @@ def grok_prepare_task(
         test_command_id,
         execution_timeout,
         baseline_commit,
+        **({"allowed_globs": allowed_globs} if allowed_globs is not None else {}),
     )
 
 
@@ -94,6 +131,9 @@ def grok_get_status(workspace_id: str, task_id: str = "", execution_id: str = ""
 
 
 def main() -> None:
+    if len(sys.argv) > 1 and sys.argv[1] in {"ledger-archive", "routine-check"}:
+        from grokbot_mcp.admin_cli import main as admin_main
+        raise SystemExit(admin_main(sys.argv[1:]))
     mcp.run(transport="stdio")
 
 

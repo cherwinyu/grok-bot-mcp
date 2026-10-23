@@ -22,7 +22,7 @@ import venv
 
 def run(command, *, cwd=None, expected=0, env=None, timeout=90):
     result = subprocess.run([str(x) for x in command], cwd=cwd, env=env, capture_output=True,
-                            text=True, encoding="utf-8", timeout=timeout, shell=False)
+                            text=True, encoding="utf-8", timeout=timeout, shell=False, errors="replace")
     if result.returncode != expected:
         # Evidence is private CI output, not the public diagnostic API. No credentials
         # are printed by tested CLIs; all config and paths belong to temporary fixtures.
@@ -319,11 +319,12 @@ def main():
         shutil.copytree(root / "tests", qa / "tests", ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
         shutil.copyfile(__file__, qa / "scripts/native_deployment_acceptance.py")
         env = {k: v for k, v in os.environ.items() if k not in {"PYTHONPATH", "GROKBOT_MCP_REGISTRY"}}
-        env.update(PYTHONUTF8="1", PYTHONIOENCODING="utf-8")
+        env.pop("PYTHONUTF8", None)
+        env.update(PYTHONIOENCODING="utf-8")
         result = subprocess.run([str(interpreters[0]), "-I", "-X", "utf8", str(qa / "scripts/native_deployment_acceptance.py"),
                                  "--worker", "--python-b", str(interpreters[1]), "--fixture", str(base / "虚构 集成"),
                                  "--worker-output", str(output / "deployment-native-summary.json")],
-                                cwd=qa, env=env, capture_output=True, text=True, encoding="utf-8", timeout=600)
+                                cwd=qa, env=env, capture_output=True, text=True, encoding="utf-8", timeout=600, errors="replace")
         logs.append(result.stdout+result.stderr)
         (output / "deployment-native.log").write_text("\n".join(logs), encoding="utf-8")
         print(result.stdout+result.stderr)

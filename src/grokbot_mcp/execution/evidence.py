@@ -5,10 +5,12 @@ from grokbot_mcp.registry import Workspace, policy_fingerprint
 from grokbot_mcp.routine import routine_readiness
 from grokbot_mcp.security.baseline import capture_snapshot, load_snapshot, same_snapshot
 from grokbot_mcp.storage import read_json
+from grokbot_mcp.strict_json import LedgerTooLarge
 
 
 def verify_evidence(workspace: Workspace, record: dict, assessment: dict,
-                    *, require_claim: bool, unchanged: bool = False, registry=None) -> tuple[dict, dict]:
+                    *, require_claim: bool, unchanged: bool = False, registry=None,
+                    review_head: bool = False) -> tuple[dict, dict]:
     """Check the frozen Manifest/proof/policy/baseline and actual claim bytes."""
     if assessment.get("ok") is not True:
         raise ValueError(str(assessment.get("error") or "validation_rejected"))
@@ -40,6 +42,8 @@ def verify_evidence(workspace: Workspace, record: dict, assessment: dict,
             claim, digest = read_json(path)
         except FileNotFoundError as exc:
             raise ValueError("claim_missing") from exc
+        except LedgerTooLarge:
+            raise
         except (OSError, ValueError) as exc:
             raise ValueError("claim_unreadable") from exc
         if not record.get("claim_sha256") or digest != record["claim_sha256"]:
@@ -64,8 +68,12 @@ def verify_evidence(workspace: Workspace, record: dict, assessment: dict,
             )
         if any(claim.get(key) != value for key, value in expected.items()):
             raise ValueError("claim_identity_mismatch")
-    current = capture_snapshot(workspace.root, list(workspace.allowed_files) + list(workspace.forbidden_files))
-    if current.get("git_head_text") != baseline.get("git_head_text"):
+    current = capture_snapshot(
+        workspace.root,
+        list(workspace.allowed_files) + list(workspace.forbidden_files),
+        include_ignored=workspace.git_gate != "advisory",
+    )
+    if current.get("git_head_text") != baseline.get("git_head_text") and not (review_head and workspace.git_gate == "advisory"):
         raise ValueError("git_head_mismatch")
     if unchanged and workspace.git_gate == "strict" and not same_snapshot(baseline, current):
         raise ValueError("baseline_stale")

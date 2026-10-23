@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import re
+import hashlib
+import unicodedata
 
 from grokbot_mcp.security.paths import is_uuid, normalize_repo_path, PathRejected
 
@@ -9,6 +11,7 @@ CONTRACT_VERSION = 1
 PHASES = {"validate", "execute"}
 STATES = {"pending", "running", "succeeded", "failed"}
 _HASH = re.compile(r"^[0-9a-f]{64}$")
+OUTPUT_PART_BYTES = 8192
 
 
 class ContractError(ValueError):
@@ -28,6 +31,8 @@ def _require(condition: bool, field: str, expected: str):
 
 def _paths(value, field):
     _require(isinstance(value, list) and all(type(x) is str for x in value), field, "array of repo-relative strings")
+    if field == "changed_files":
+        value = [unicodedata.normalize("NFC", x) for x in value]
     try:
         names = [normalize_repo_path(x) for x in value]
     except PathRejected as exc:
@@ -48,6 +53,45 @@ def _counts(tests: dict, *, terminal: bool):
         _require(type(tests.get("exit_code")) is int, "tests.exit_code", "integer exit status; boolean is not an exit code")
     if "unit" in tests:
         _require(tests["unit"] in ("test_cases", "assertions"), "tests.unit", "test_cases or assertions")
+
+
+def output_evidence(raw: bytes) -> dict:
+    """Build embedded UTF-8 output evidence. Hash/count cover the full byte stream."""
+    raw.decode("utf-8")  # Validate the full stream, including bytes omitted below.
+    head = raw[:OUTPUT_PART_BYTES].decode("utf-8", errors="ignore")
+    remainder = raw[len(head.encode("utf-8")):]
+    tail = remainder[-OUTPUT_PART_BYTES:].decode("utf-8", errors="ignore")
+    truncated = len(head.encode("utf-8")) + len(tail.encode("utf-8")) < len(raw)
+    return {"output": {"head": head, "tail": tail, "truncated": truncated},
+            "output_sha256": hashlib.sha256(raw).hexdigest(), "output_bytes": len(raw)}
+
+
+def _output(tests: dict):
+    keys = {"output", "output_sha256", "output_bytes"}
+    if not keys.intersection(tests):
+        return
+    output = tests.get("output")
+    _require(type(output) is dict and set(output) == {"head", "tail", "truncated"},
+             "tests.output", "object with head, tail and truncated")
+    for key in ("head", "tail"):
+        part = output[key]
+        _require(type(part) is str and len(part) <= OUTPUT_PART_BYTES, "tests.output." + key, "UTF-8 string of at most 8192 bytes")
+        try:
+            encoded = part.encode("utf-8")
+        except UnicodeError:
+            raise ContractError("tests.output." + key, "valid UTF-8 string") from None
+        _require(len(encoded) <= OUTPUT_PART_BYTES, "tests.output." + key, "UTF-8 string of at most 8192 bytes")
+    _require(type(output["truncated"]) is bool, "tests.output.truncated", "boolean")
+    _require(type(tests.get("output_bytes")) is int and 0 <= tests["output_bytes"] <= 2**63 - 1,
+             "tests.output_bytes", "non-negative 64-bit byte count")
+    _require(type(tests.get("output_sha256")) is str and bool(_HASH.fullmatch(tests["output_sha256"])),
+             "tests.output_sha256", "64 lowercase hexadecimal characters")
+    retained = (output["head"] + output["tail"]).encode("utf-8")
+    if output["truncated"]:
+        _require(0 < len(retained) < tests["output_bytes"], "tests.output_bytes", "larger than retained truncated output")
+    else:
+        _require(len(retained) == tests["output_bytes"], "tests.output_bytes", "exact full output byte count")
+        _require(hashlib.sha256(retained).hexdigest() == tests["output_sha256"], "tests.output_sha256", "digest of complete output")
 
 
 def validate_result(value: object, phase: str, *, expected: dict | None = None) -> dict:
@@ -101,6 +145,7 @@ def validate_result(value: object, phase: str, *, expected: dict | None = None) 
             _require(type(tests) is dict, "tests", "object")
             _require(type(tests.get("command_id")) is str and bool(tests["command_id"]), "tests.command_id", "registered command ID")
             _counts(tests, terminal=terminal)
+            _output(tests)
             if tests.get("not_run") is True:
                 _require(data["status"] != "succeeded", "tests.not_run", "not_run cannot support succeeded")
             if data["status"] == "succeeded":
@@ -108,13 +153,15 @@ def validate_result(value: object, phase: str, *, expected: dict | None = None) 
     return data
 
 
-def diagnosis(data: dict, phase: str, *, expected: dict | None = None) -> dict:
+def diagnosis(data: dict, phase: str, *, expected: dict | None = None, require_test_output: bool = False) -> dict:
     try:
         validate_result(data, phase, expected=expected)
     except ContractError as exc:
         return exc.report()
     if data["status"] in {"pending", "running"}:
         category = "intermediate_result"
+    elif phase == "execute" and require_test_output and "output" not in data.get("tests", {}):
+        category = "test_evidence_missing"
     elif phase == "validate" and data["status"] == "failed":
         category = "validation_failure"
     elif phase == "execute" and data.get("tests", {}).get("not_run") is True:

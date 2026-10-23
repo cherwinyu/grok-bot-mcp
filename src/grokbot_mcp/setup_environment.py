@@ -48,7 +48,7 @@ def inspect_environment() -> dict:
         )
         try:
             result = subprocess.run([python, "-I", "-c", probe], capture_output=True,
-                                    text=True, timeout=20, check=False)
+                                    text=True, timeout=20, check=False, encoding="utf-8", errors="replace")
             if result.returncode or result.stdout.strip() != "BRIDGE_INSTALLATION_OK":
                 codes.append("installation_mismatch")
         except (OSError, subprocess.SubprocessError):

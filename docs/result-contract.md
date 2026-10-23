@@ -1,5 +1,9 @@
 # Result contract v1 / 结果 JSON 契约
 
+Optional test selection, bounded embedded output and advisory Git review are documented in [English](test-evidence-git-review.md) / [中文](test-evidence-git-review.zh-CN.md). New options are off by default; legacy strict summaries and frozen evidence remain unchanged.
+
+The manifest remains an explicit file list with optional expansion audit. Archived task/execution IDs reject late results as `archived_task`; published result and claim bytes remain preserved. Manual ledger deletion is prohibited; the only supported ledger-archiving recovery is `ledger-archive`. See [scope expansion and recovery](advisory-workspaces.md) / [范围展开与恢复](advisory-workspaces.zh-CN.md). / manifest 仍为显式文件清单；归档身份拒绝迟到结果且保留原证据；禁止手工删账本，只支持文档中的归档恢复路径。
+
 [Deployment](deployment.md) · [部署说明](deployment.zh-CN.md)
 
 `result_contract.py` is the shared checker used by validation/execution interpretation, execution evidence assessment and local result writing. Existing legacy `status`/`error` vocabulary remains; `result_diagnosis` adds a precise category rather than redefining a frozen failure. Local format checking and publishing **never** mean bridge acceptance or human QA.

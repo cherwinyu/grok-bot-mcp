@@ -19,7 +19,9 @@ from grokbot_mcp.observation import deadline
 from grokbot_mcp.result_contract import diagnosis, result_identity, validate_result, ContractError
 from grokbot_mcp.security.baseline import capture_snapshot, execution_delta, load_snapshot, replace_snapshot, same_snapshot, write_snapshot
 from grokbot_mcp.security.gitcheck import git_error, git_snapshot, workspace_git_rejection
-from grokbot_mcp.security.paths import is_reparse_point, is_uuid, normalize_repo_path
+from grokbot_mcp.security.paths import is_reparse_point, is_uuid, normalize_repo_path, normalize_policy_path, PathRejected
+from grokbot_mcp.strict_json import LedgerTooLarge, check_size
+import unicodedata
 from grokbot_mcp.security.targets import TargetRejected, resolve_exact_files
 from grokbot_mcp.storage import JsonLedger, read_json, utc_now, sha256_bytes
 from grokbot_mcp.transport.webhook import HttpOutcome, build_payload, post_once
@@ -136,6 +138,8 @@ def assess(workspace: Workspace, task_id: str, *, check_workspace: bool = True) 
         return {"ok": False, "error": "validation_missing", "manifest_sha256": digest, "document": document}
     try:
         proof, proof_sha = read_json(proof_path)
+    except LedgerTooLarge as exc:
+        return {"ok": False, "error": exc.code, "manifest_sha256": digest, "document": document}
     except (OSError, ValueError) as exc:
         return {"ok": False, "error": "validation_unreadable", "manifest_sha256": digest, "document": document}
     try:
@@ -220,7 +224,9 @@ def prepare_execution(workspace: Workspace, task_id: str, sibling_roots: list[Pa
         assert isinstance(document, dict)
         watched = list(workspace.allowed_files) + list(workspace.forbidden_files)
         try:
-            snapshot = capture_snapshot(workspace.root, watched)
+            snapshot = capture_snapshot(
+                workspace.root, watched, include_ignored=workspace.git_gate != "advisory",
+            )
             baseline_sha = write_snapshot(_bridge(workspace) / "execution_baselines", execution_id, snapshot)
         except ValueError as exc:
             return _base(manifest_task_id=task_id, error=str(exc))
@@ -381,7 +387,9 @@ def claim_execution(workspace: Workspace, execution_id: str, sibling_roots: list
         if workspace.git_gate == "advisory":
             watched = list(workspace.allowed_files) + list(workspace.forbidden_files)
             try:
-                snapshot = capture_snapshot(workspace.root, watched)
+                snapshot = capture_snapshot(
+                    workspace.root, watched, include_ignored=workspace.git_gate != "advisory",
+                )
             except ValueError as exc:
                 return {"ok": False, "error": str(exc)}
             if snapshot.get("git_head_text") != document.get("baseline_commit"):
@@ -424,6 +432,7 @@ def claim_execution(workspace: Workspace, execution_id: str, sibling_roots: list
         import json
 
         raw = json.dumps(payload, ensure_ascii=True, indent=2, sort_keys=True).encode("utf-8")
+        check_size(raw)
         try:
             handle = os.open(str(claim_file), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
         except FileExistsError:
@@ -473,7 +482,8 @@ def _interpret(
 ) -> dict[str, object]:
     execution_id = str(record["execution_id"])
     task_id = str(record["manifest_task_id"])
-    result["result_diagnosis"] = diagnosis(parsed, "execute", expected=result_identity(workspace, "execute", record))
+    result["result_diagnosis"] = diagnosis(parsed, "execute", expected=result_identity(workspace, "execute", record),
+                                           require_test_output=getattr(workspace, "require_test_output", False))
     if parsed.get("cursor_cloud_agent_used") is True:
         return _fail(store, execution_id, result, "external_agent_rejected", result_sha256)
     identity_ok = (
@@ -488,28 +498,48 @@ def _interpret(
         return _fail(store, execution_id, result, "identity_mismatch", result_sha256)
     report = assess(workspace, task_id, check_workspace=False)
     try:
-        baseline, current = verify_evidence(workspace, record, report, require_claim=True)
+        baseline, current = verify_evidence(workspace, record, report, require_claim=True, review_head=True)
     except (OSError, ValueError) as exc:
         return _fail(store, execution_id, result, str(exc), result_sha256)
     delta = execution_delta(baseline, current)
+    if workspace.git_gate == "advisory":
+        from grokbot_mcp.security.git_review import changes_since_baseline
+        try:
+            delta = changes_since_baseline(getattr(workspace, "root", None), baseline, current)
+        except (OSError, ValueError) as exc:
+            return _fail(store, execution_id, result, str(exc), result_sha256)
     result["changed_files"] = delta
     result["code_modified"] = bool(delta)
     document = report.get("document")
     allowed = set(document.get("allowed_files") or []) if isinstance(document, dict) else set()
+
+    def match_path(name):
+        return (normalize_policy_path(name, casefold=True) if workspace.git_gate == "advisory"
+                else unicodedata.normalize("NFC", name))
+
+    allowed_keys = {match_path(name) for name in allowed}
+    delta_keys = {match_path(name) for name in delta}
     reported = _reported_files(parsed.get("changed_files"), workspace, advisory=workspace.git_gate == "advisory")
     forbidden = set(workspace.forbidden_files)
-    protected_change = any(_blocked(name, forbidden) for name in delta)
-    protected_report = reported is not None and any(_blocked(name, forbidden) for name in reported)
+    protected_change = any(_blocked(name, forbidden, advisory=workspace.git_gate == "advisory") for name in delta)
+    protected_report = reported is not None and any(_blocked(name, forbidden, advisory=workspace.git_gate == "advisory") for name in reported)
     if reported is None or protected_change or protected_report:
         return _fail(store, execution_id, result, "scope_violation", result_sha256)
-    out_of_scope = sorted({name for name in set(reported) | set(delta) if name not in allowed})
+    reported_keys = {match_path(name) for name in reported}
+    out_of_scope = sorted({name for name in set(reported) | set(delta) if match_path(name) not in allowed_keys})
     if workspace.git_gate == "advisory":
         result["out_of_scope_changes"] = out_of_scope
-        if {name for name in reported if name in allowed} != {name for name in delta if name in allowed}:
+        from grokbot_mcp.security.git_review import review
+        result["git_review"] = review(baseline, current, delta, reported, list(allowed),
+                                      getattr(workspace, "other_prefixes", ()))
+        # Preserve the old outside-allowed union, including declared others.
+        if result["git_review"]["head_changed"]:
+            return _fail(store, execution_id, result, "git_head_mismatch", result_sha256)
+        if (reported_keys & allowed_keys) != (delta_keys & allowed_keys):
             return _fail(store, execution_id, result, "result_inconsistent", result_sha256)
-    elif any(_outside(name, allowed, workspace.forbidden_files) for name in delta):
+    elif any(_outside(match_path(name), allowed_keys, workspace.forbidden_files) for name in delta):
         return _fail(store, execution_id, result, "scope_violation", result_sha256)
-    elif set(reported) != set(delta):
+    elif reported_keys != delta_keys:
         return _fail(store, execution_id, result, "result_inconsistent", result_sha256)
     issue = result["result_diagnosis"]
     if issue["category"] in {"format_error", "identity_error"}:
@@ -519,6 +549,14 @@ def _interpret(
     command = document.get("test_command_id") if isinstance(document, dict) else None
     if not isinstance(tests, dict) or tests.get("command_id") != command:
         return _fail(store, execution_id, result, "illegal_test_command", result_sha256)
+    if issue["category"] == "test_evidence_missing":
+        return _fail(store, execution_id, result, "test_evidence_missing", result_sha256)
+    from grokbot_mcp.test_commands import enhanced_tests
+    enhanced = enhanced_tests(workspace, workspace.command(command))
+    if enhanced:
+        # Raw output stays only in the result file; status/ledger contain metadata.
+        result["tests"] = {k: tests[k] for k in ("command_id", "passed", "failed", "exit_code", "not_run",
+                            "unit", "case_count", "assertion_count", "output_sha256", "output_bytes") if k in tests}
     if tests.get("not_run") is True:
         result.update(test_passed=None, test_failed=None, godot_exit_code=None)
         return _fail(store, execution_id, result, "execution_failed", result_sha256)
@@ -529,22 +567,24 @@ def _interpret(
         return _fail(store, execution_id, result, "test_failed", result_sha256)
     result["test_passed"] = passed
     result["test_failed"] = failed
-    result["godot_exit_code"] = exit_code
+    godot_exit_code = exit_code if not enhanced or command == "godot" or command.startswith("godot_") else None
+    result["godot_exit_code"] = godot_exit_code
     if passed < 0 or failed != 0 or exit_code != 0 or parsed.get("status") == "failed":
         return _fail(store, execution_id, result, "test_failed", result_sha256)
     if parsed.get("status") != "succeeded":
         return _fail(store, execution_id, result, "execution_failed", result_sha256)
     task_type = document.get("task_type") if isinstance(document, dict) else None
-    if task_type == "code_change" and any(name not in delta for name in allowed):
+    if task_type == "code_change" and not allowed_keys <= delta_keys:
         return _fail(store, execution_id, result, "result_inconsistent", result_sha256)
     verified_at = utc_now()
     store.update(execution_id, execution_state="succeeded", qa_state="not_reviewed", error=None,
                  result_sha256=result_sha256, verified_at=verified_at, historical_status="succeeded",
                  terminal=True, verified_snapshot=current, late_result=deadline(record)["deadline_exceeded"],
                  verified_summary={"changed_files": delta, "code_modified": bool(delta),
-                                   **({"out_of_scope_changes": out_of_scope}
+                                   **({"out_of_scope_changes": out_of_scope, "git_review": result["git_review"]}
                                       if workspace.git_gate == "advisory" else {}),
-                                   "test_passed": passed, "test_failed": failed, "godot_exit_code": exit_code,
+                                   "test_passed": passed, "test_failed": failed, "godot_exit_code": godot_exit_code,
+                                   **({"tests": result["tests"]} if enhanced else {}),
                                    "result_diagnosis": result.get("result_diagnosis")})
     result.update(verified_at=verified_at, historical_status="succeeded", verification_scope="current",
                   current_integrity=True, integrity_error=None)
@@ -564,11 +604,11 @@ def _reported_files(value: object, workspace: Workspace, *, advisory: bool = Fal
         if not isinstance(item, str):
             return None
         try:
-            text = normalize_repo_path(item)
+            text = (normalize_policy_path(item) if advisory else
+                    normalize_repo_path(unicodedata.normalize("NFC", item)))
         except Exception:
             return None
-        if not advisory and (text not in workspace.allowed_files
-                             or _outside(text, set(workspace.allowed_files), workspace.forbidden_files)):
+        if not advisory and _outside(text, {unicodedata.normalize("NFC", name) for name in workspace.allowed_files}, workspace.forbidden_files):
             return None
         names.append(text)
     return names
@@ -580,7 +620,13 @@ def _outside(name: str, allowed: set[str], forbidden: tuple[str, ...]) -> bool:
     return any(name == item or name.startswith(item + "/") for item in forbidden)
 
 
-def _blocked(name: str, forbidden: set[str]) -> bool:
+def _blocked(name: str, forbidden: set[str], *, advisory: bool = False) -> bool:
+    if advisory:
+        try:
+            name = normalize_policy_path(name, casefold=True)
+            forbidden = {normalize_policy_path(item, casefold=True) for item in forbidden}
+        except PathRejected:
+            return True
     return any(name == item or name.startswith(item + "/") for item in forbidden)
 
 
@@ -590,6 +636,9 @@ def _fail(store: JsonLedger, execution_id: str, result: dict[str, object], code:
     summary = {"result_diagnosis": result.get("result_diagnosis")}
     if isinstance(result.get("out_of_scope_changes"), list):
         summary["out_of_scope_changes"] = result["out_of_scope_changes"]
+    for key in ("git_review", "tests"):
+        if key in result:
+            summary[key] = result[key]
     store.update(execution_id, execution_state=state, qa_state="rejected", error=code,
                  result_sha256=result_sha256, verified_at=verified_at, historical_status=state, terminal=True,
                  late_result=deadline(store.read(execution_id))["deadline_exceeded"],

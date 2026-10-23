@@ -64,15 +64,15 @@ class SetupTest(unittest.TestCase):
         (self.root / ".bridge/validate_routine_status.json").unlink()
         with patch("builtins.input", side_effect=["n"] * 4):
             self.assertEqual(wizard.main(self.args), 1)
-        self.assertFalse(json.loads((self.base / "execution_switch.json").read_text())["enabled"])
+        self.assertFalse(json.loads((self.base / "execution_switch.json").read_text(encoding="utf-8"))["enabled"])
         self.assertFalse((self.root / ".bridge/validate_routine_status.json").exists())
 
     def test_explicit_confirmation_and_existing_switch_preserved(self):
-        (self.base / "execution_switch.json").write_text('{"enabled": true}')
+        (self.base / "execution_switch.json").write_text('{"enabled": true}', encoding="utf-8")
         with patch("builtins.input", side_effect=["n", "y", "n", "y"]):
             self.assertEqual(wizard.main(self.args), 0)
-        self.assertTrue(json.loads((self.base / "execution_switch.json").read_text())["enabled"])
-        self.assertIn("user_confirmed", (self.root / ".bridge/execute_routine_status.json").read_text())
+        self.assertTrue(json.loads((self.base / "execution_switch.json").read_text(encoding="utf-8"))["enabled"])
+        self.assertIn("user_confirmed", (self.root / ".bridge/execute_routine_status.json").read_text(encoding="utf-8"))
 
     def test_register_and_cancel_preserve_registry(self):
         registry = self.base / "new" / "registry.json"
@@ -92,7 +92,7 @@ class SetupTest(unittest.TestCase):
     def test_missing_target_and_invalid_registry_fail_closed(self):
         (self.root / "src/counter.py").unlink()
         self.assertEqual(wizard.main(self.args + ["--check"]), 1)
-        self.registry.write_text("{}")
+        self.registry.write_text("{}", encoding="utf-8")
         before = self.registry.read_bytes()
         self.assertEqual(wizard.main(self.args), 1)
         self.assertEqual(before, self.registry.read_bytes())

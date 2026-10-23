@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Iterator
 
 from grokbot_mcp.security.paths import is_reparse_point, is_uuid
+from grokbot_mcp.strict_json import check_size
 
 
 def utc_now() -> str:
@@ -31,6 +32,7 @@ def read_json(path: Path) -> tuple[dict[str, object], str]:
     from grokbot_mcp.strict_json import decode, MAX_BYTES
     with path.open("rb") as stream:
         raw = stream.read(MAX_BYTES + 1)
+    check_size(raw)
     parsed = decode(raw)
     return parsed, sha256_bytes(raw)
 
@@ -42,6 +44,7 @@ def write_json_new(path: Path, document: dict[str, object]) -> None:
     if is_reparse_point(path.parent):
         raise ValueError("reparse")
     raw = json.dumps(document, ensure_ascii=True, indent=2, sort_keys=True).encode("utf-8")
+    check_size(raw)
     temporary = path.parent / f".{path.stem}.{uuid.uuid4().hex}.tmp"
     try:
         with temporary.open("wb") as handle:
@@ -86,6 +89,10 @@ class JsonLedger:
         return self.directory / f"{record_id}.json"
 
     def list_records(self) -> list[dict[str, object]]:
+        if self.directory.name in {"tasks_v2", "executions"}:
+            from grokbot_mcp.ledger_archive import incomplete
+            if incomplete(self.directory.parent.parent):
+                raise ValueError("archive_incomplete")
         records: list[dict[str, object]] = []
         if not self.directory.exists():
             return records
@@ -99,6 +106,7 @@ class JsonLedger:
         return records
 
     def read(self, record_id: str) -> dict[str, object]:
+        self._reject_archived(record_id)
         path = self.path_for(record_id)
         if not path.is_file():
             raise ValueError("missing")
@@ -106,12 +114,20 @@ class JsonLedger:
         return document
 
     def create(self, record_id: str, document: dict[str, object]) -> None:
+        self._reject_archived(record_id)
         write_json_new(self.path_for(record_id), document)
+
+    def _reject_archived(self, record_id: str) -> None:
+        if self.directory.name in {"tasks_v2", "executions"}:
+            from grokbot_mcp.ledger_archive import archived
+            if archived(self.directory.parent.parent, record_id, execution=self.directory.name == "executions"):
+                raise ValueError("archived_task")
 
     def update(self, record_id: str, **fields: object) -> dict[str, object]:
         document = self.read(record_id)
         document.update(fields)
         raw = json.dumps(document, ensure_ascii=True, indent=2, sort_keys=True).encode("utf-8")
+        check_size(raw)
         path = self.path_for(record_id)
         temporary = path.parent / f".{record_id}.update.tmp"
         with temporary.open("wb") as handle:

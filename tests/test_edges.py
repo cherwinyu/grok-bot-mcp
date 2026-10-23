@@ -98,5 +98,5 @@ class EdgeTest(unittest.TestCase):
         import sys
 
         example = Path(__file__).resolve().parents[1] / "examples" / "minimal_workspace"
-        proc = subprocess.run([sys.executable, "-m", "unittest", "discover", "-s", "tests", "-t", "."], cwd=example, capture_output=True, text=True)
+        proc = subprocess.run([sys.executable, "-m", "unittest", "discover", "-s", "tests", "-t", "."], cwd=example, capture_output=True, text=True, encoding="utf-8", errors="replace")
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)

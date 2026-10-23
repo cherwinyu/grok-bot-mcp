@@ -11,7 +11,7 @@ def ps(value: str) -> str:
 
 
 def render_routine(phase: str, *, workspace_root: Path, workspace_id: str,
-                   registry: Path, python: Path, mode: str) -> str:
+                   registry: Path, python: Path, mode: str, test_options: dict | None = None) -> str:
     if phase not in {"validate", "execute"} or mode not in {"create", "reuse", "migrate"}:
         raise ValueError("invalid_routine_phase")
     package = files("grokbot_mcp").joinpath("templates")
@@ -27,6 +27,10 @@ def render_routine(phase: str, *, workspace_root: Path, workspace_id: str,
     text = text.replace("For the example workspace that command id is `python_unittest`.",
                         "Use the administrator's registered test-command mapping; do not infer a command from this template.")
     writing = package.joinpath("result-writing.md").read_text(encoding="utf-8")
+    options = test_options or {}
+    if phase == "execute" and (options.get("require_test_output") or options.get("test_selection") == "reject"
+                              or any(c.get("applies_to") is not None or c.get("argv") for c in options.get("test_commands", []))):
+        writing += "\n" + package.joinpath("test-evidence.md").read_text(encoding="utf-8")
     substitutions = {"{{PYTHON_PS}}": ps(str(python)), "{{REGISTRY_PS}}": ps(str(registry)),
         "{{ROOT_PS}}": ps(str(workspace_root)), "{{WORKSPACE_PS}}": ps(workspace_id),
         "{{PHASE}}": phase, "{{ID_FIELD}}": "task_id" if phase == "validate" else "execution_id",

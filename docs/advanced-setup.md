@@ -4,6 +4,8 @@
 
 The wizard is the recommended entry. These commands are for explicit installation selection, administrator maintenance and reference—not a second recommended configuration flow. / 主流程始终是向导；本页仅用于安装选择、管理员维护和手工参考。
 
+Administrator `routine-check` and `ledger-archive`, restricted `allowed_globs` and whole-repository advisory operation are documented in the [English guide](advisory-workspaces.md) / [中文指南](advisory-workspaces.zh-CN.md). These commands never access credential values or authorize sends. / 两个管理员命令不读取凭据值，也不授权发送。
+
 ## Install source without the PowerShell bootstrap / 不使用引导脚本安装
 
 From the reviewed candidate checkout, use a **new** environment, not an active MCP installation:

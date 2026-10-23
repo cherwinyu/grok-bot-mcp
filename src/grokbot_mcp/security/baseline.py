@@ -8,7 +8,8 @@ import os
 import subprocess
 from pathlib import Path
 
-from grokbot_mcp.security.paths import is_reparse_point, is_uuid
+from grokbot_mcp.security.paths import is_reparse_point, is_uuid, normalize_policy_path
+from grokbot_mcp.strict_json import check_size, MAX_BYTES, decode
 
 _SKIP_EXACT = {".bridge"}
 _SKIP_PREFIXES = (".bridge/",)
@@ -33,21 +34,30 @@ def _skipped(name: str) -> bool:
     return name in _SKIP_EXACT or name.startswith(_SKIP_PREFIXES)
 
 
-def _status_lists(stdout: str) -> tuple[list[str], list[str], list[str]]:
+def _status_lists(
+    stdout: str, *, decode_ignored: bool = False,
+) -> tuple[list[str], list[str], list[str]]:
     status_paths: list[str] = []
     ignored: list[str] = []
     untracked: list[str] = []
     for line in stdout.splitlines():
         if line.startswith("!! "):
-            name = line[3:].strip().replace("\\", "/").rstrip("/")
+            name = line[3:].strip()
+            if decode_ignored:
+                name = normalize_policy_path(name, git_quoted=True)
+            name = name.replace("\\", "/").rstrip("/")
             if name and not _skipped(name):
                 ignored.append(name)
             continue
         if len(line) < 4:
             continue
         body = line[3:].strip().replace("\\", "/")
+        if decode_ignored:
+            body = line[3:].strip()
         names = [part.strip() for part in body.split(" -> ")] if " -> " in body else [body]
         for name in names:
+            if decode_ignored:
+                name = normalize_policy_path(name, git_quoted=True)
             name = name.rstrip("/")
             if not name or _skipped(name):
                 continue
@@ -57,7 +67,28 @@ def _status_lists(stdout: str) -> tuple[list[str], list[str], list[str]]:
     return status_paths, ignored, untracked
 
 
-def capture_snapshot(root: Path, watched: list[str], runner=subprocess.run) -> dict[str, object]:
+def _normalized_match_path(value: str) -> str:
+    return normalize_policy_path(value, casefold=True)
+
+
+def _under_watched(name: str, watched: list[str]) -> bool:
+    normalized_name = _normalized_match_path(name)
+    for item in watched:
+        prefix = _normalized_match_path(item)
+        if prefix and (
+            normalized_name == prefix or normalized_name.startswith(prefix + "/")
+        ):
+            return True
+    return False
+
+
+def capture_snapshot(
+    root: Path,
+    watched: list[str],
+    runner=subprocess.run,
+    *,
+    include_ignored: bool = True,
+) -> dict[str, object]:
     head = _run(root, ["rev-parse", "HEAD"], runner)
     status = _run(root, ["status", "--porcelain=v1", "--ignored", "--untracked-files=all"], runner)
     diff = _run(root, ["diff", "--name-only", "HEAD"], runner)
@@ -67,10 +98,28 @@ def capture_snapshot(root: Path, watched: list[str], runner=subprocess.run) -> d
     if not head_text:
         raise ValueError("git_status_failed")
     diff_files = [line.strip().replace("\\", "/") for line in (diff.stdout or "").splitlines() if line.strip()]
-    status_paths, ignored, untracked = _status_lists(status.stdout or "")
+    if not include_ignored:
+        diff_files = [normalize_policy_path(line.strip(), git_quoted=True)
+                      for line in (diff.stdout or "").splitlines() if line.strip()]
+    status_paths, ignored, untracked = _status_lists(
+        status.stdout or "", decode_ignored=not include_ignored,
+    )
+    if not include_ignored:
+        ignored = [name for name in ignored if _under_watched(name, watched)]
     hashes: dict[str, str | None] = {}
     for name in watched:
         hashes[name] = _hash_file(root / name)
+    extra = {}
+    if not include_ignored:
+        dirty_hashes = {}
+        for name in sorted(set(diff_files) | set(status_paths) | set(untracked)):
+            if _skipped(name):
+                continue
+            path = root / name
+            if any(is_reparse_point(p) for p in (path, *path.parents)) or (path.is_file() and path.stat().st_nlink != 1):
+                raise ValueError("reparse")
+            dirty_hashes[name] = _hash_file(path)
+        extra["dirty_hashes"] = dirty_hashes
     return {
         "schema_version": 1,
         "git_head_text": head_text,
@@ -79,6 +128,7 @@ def capture_snapshot(root: Path, watched: list[str], runner=subprocess.run) -> d
         "status_paths": sorted(set(status_paths)),
         "ignored": sorted(set(ignored)),
         "file_hashes": hashes,
+        **extra,
     }
 
 
@@ -92,6 +142,7 @@ def write_snapshot(directory: Path, execution_id: str, snapshot: dict[str, objec
     if target.exists():
         raise ValueError("baseline_exists")
     raw = json.dumps(snapshot, ensure_ascii=True, indent=2, sort_keys=True).encode("utf-8")
+    check_size(raw)
     temporary = directory / f".{execution_id}.tmp"
     try:
         with temporary.open("wb") as handle:
@@ -114,6 +165,7 @@ def replace_snapshot(directory: Path, execution_id: str, snapshot: dict[str, obj
     if not target.is_file() or is_reparse_point(target):
         raise ValueError("baseline_missing")
     raw = json.dumps(snapshot, ensure_ascii=True, indent=2, sort_keys=True).encode("utf-8")
+    check_size(raw)
     temporary = directory / f".{execution_id}.tmp"
     try:
         with temporary.open("wb") as handle:
@@ -132,18 +184,24 @@ def load_snapshot(directory: Path, execution_id: str, expected_sha256: object) -
     target = directory / f"{execution_id}.json"
     if not target.is_file() or any(is_reparse_point(part) for part in (target, *target.parents)):
         raise ValueError("baseline_missing")
-    raw = target.read_bytes()
+    with target.open("rb") as handle:
+        raw = handle.read(MAX_BYTES + 1)
+    check_size(raw)
     if hashlib.sha256(raw).hexdigest() != expected_sha256:
         raise ValueError("baseline_missing")
-    parsed = json.loads(raw.decode("utf-8"))
+    parsed = decode(raw)
     if not isinstance(parsed, dict) or not isinstance(parsed.get("file_hashes"), dict):
         raise ValueError("baseline_missing")
     return parsed
 
 
 def same_snapshot(left: dict[str, object], right: dict[str, object]) -> bool:
-    keys = ("git_head_text", "diff_files", "untracked", "status_paths", "ignored", "file_hashes")
-    return all(left.get(key) == right.get(key) for key in keys)
+    keys = ("git_head_text", "diff_files", "untracked", "status_paths", "file_hashes")
+    return (
+        all(left.get(key) == right.get(key) for key in keys)
+        and (left.get("ignored") or []) == (right.get("ignored") or [])
+        and ("dirty_hashes" not in left or left["dirty_hashes"] == right.get("dirty_hashes"))
+    )
 
 
 def execution_delta(baseline: dict[str, object], current: dict[str, object]) -> list[str]:
@@ -153,9 +211,12 @@ def execution_delta(baseline: dict[str, object], current: dict[str, object]) -> 
     for name in sorted(set(before) | set(after)):
         if before.get(name) != after.get(name):
             changed.append(name)
-    for key in ("diff_files", "untracked", "status_paths", "ignored"):
+    for key in ("diff_files", "untracked", "status_paths"):
         if key in baseline and key in current:
             for name in sorted(set(current.get(key) or []) - set(baseline.get(key) or [])):
                 if name not in changed:
                     changed.append(name)
+    for name in sorted(set(current.get("ignored") or []) - set(baseline.get("ignored") or [])):
+        if name not in changed:
+            changed.append(name)
     return changed

@@ -43,14 +43,14 @@ class BoundaryProbes(unittest.TestCase):
         self.assertEqual(before,self.snapshot())
         RESULTS['export_valid_registry']={'blocked':True,'files_unchanged':True}
     def test_regression_export_invalid_registry_should_still_block_workspace(self):
-        data=json.loads(self.registry.read_text());data['workspaces'][0]['expected_head']='invalid-fixture-head'
-        self.registry.write_text(json.dumps(data))
+        data=json.loads(self.registry.read_text(encoding="utf-8"));data['workspaces'][0]['expected_head']='invalid-fixture-head'
+        self.registry.write_text(json.dumps(data), encoding="utf-8")
         report=self.report(export=True);self.assertIn('registry_invalid',{f['code'] for f in report['findings']})
         target=self.root/'review-diagnostic.json'
         blocked=False
         try:wizard.save_export(target,report,registry=self.registry)
         except (ValueError,RegistryError):blocked=True
-        RESULTS['export_invalid_registry']={'diagnosed_invalid_registry':True,'blocked':blocked,'new_workspace_file_created':target.exists(),'original_registry_unchanged':json.loads(self.registry.read_text())==data,'overwrote_existing_file':False}
+        RESULTS['export_invalid_registry']={'diagnosed_invalid_registry':True,'blocked':blocked,'new_workspace_file_created':target.exists(),'original_registry_unchanged':json.loads(self.registry.read_text(encoding="utf-8"))==data,'overwrote_existing_file':False}
         self.assertTrue(blocked,'save_export writes a NEW file inside a known workspace when registry validation fails')
     def test_control_export_valid_outside_does_not_touch_credentials(self):
         with patch('grokbot_mcp.credentials.backend.status_for',side_effect=AssertionError('no presence access')), \
@@ -60,7 +60,7 @@ class BoundaryProbes(unittest.TestCase):
         self.assertNotIn('diagnostic_failed',{f['code'] for f in report['findings']})
         self.assertFalse(report['credentials_checked']);self.assertIsNone(report['credentials_ready'])
         target=self.base/'review-diagnostic.json';wizard.save_export(target,report,registry=self.registry)
-        data=target.read_text();self.assertNotIn(str(self.root),data)
+        data=target.read_text(encoding="utf-8");self.assertNotIn(str(self.root),data)
         RESULTS['export_credential_isolation']={'api_calls':0,'saved_outside_workspace':True,'credential_state':'not_checked'}
     def test_control_readonly_snapshot_leaves_git_and_business_files_unchanged(self):
         before=self.snapshot();report=self.report()
@@ -91,7 +91,7 @@ class BoundaryProbes(unittest.TestCase):
         finally:case.doCleanups()
     def test_control_paused_binding_is_separate_from_routine_enabled(self):
         from grokbot_mcp.routine import routine_readiness
-        path=self.root/'.bridge/execute_routine_status.json';data=json.loads(path.read_text());data['routine_status']='paused';path.write_text(json.dumps(data))
+        path=self.root/'.bridge/execute_routine_status.json';data=json.loads(path.read_text(encoding="utf-8"));data['routine_status']='paused';path.write_text(json.dumps(data), encoding="utf-8")
         ws=load_registry(self.registry)[WORKSPACE_ID];raw=routine_readiness(ws,'execute',self.registry);report=self.report()
         self.assertTrue(raw['binding_confirmed']);self.assertFalse(raw['routine_enabled'])
         RESULTS['paused_binding_summary']={'original_binding_confirmed':raw['binding_confirmed'],'routine_enabled':raw['routine_enabled'],'diagnostic_administrator_binding_confirmed':report['administrator_binding_confirmed']}
@@ -220,7 +220,7 @@ class SelectedExecutionTest(unittest.TestCase):
         report=self.report(ex['execution_id'],task_id=task['task_id'])
         self.assertTrue(report['selected_execution_submit_permitted'])
         self.assertTrue(report['complete_for_purpose'])
-        self.assertFalse(json.loads(self.c.path('executions',ex['execution_id']).read_text())['webhook_attempted'])
+        self.assertFalse(json.loads(self.c.path('executions',ex['execution_id']).read_text(encoding="utf-8"))['webhook_attempted'])
 
     def test_unknown_submission_cannot_pass(self):
         _,ex=self.prepared()
@@ -293,7 +293,7 @@ class BootstrapConflictTest(unittest.TestCase):
     def test_original_windows_probe_rejects_check_target(self):
         root=Path(__file__).resolve().parents[1]
         proc=subprocess.run([sys.executable,str(root/'scripts/probe_bootstrap_check_target.py'),
-            '--source',str(root)],capture_output=True,text=True,timeout=75)
+            '--source',str(root)],capture_output=True,text=True,timeout=75, encoding="utf-8", errors="replace")
         payload=json.loads(proc.stdout)
         self.assertTrue(payload['legacy_control_selected_helper'])
         self.assertFalse(payload['real_credentials_used'])
@@ -312,7 +312,7 @@ class BootstrapConflictTest(unittest.TestCase):
             env={**os.environ,'LOCALAPPDATA':str(root)}
             proc=subprocess.run([shell,'-NoProfile','-NonInteractive','-File',str(script),
                 '-Python',str(fake),'-Check','-Target','fictional-target'],env=env,
-                capture_output=True,text=True,timeout=30)
+                capture_output=True,text=True,timeout=30, encoding="utf-8", errors="replace")
             self.assertEqual(proc.returncode,1)
             self.assertIn('invalid_arguments',proc.stdout)
             self.assertFalse(marker.exists())

@@ -76,6 +76,9 @@ def _check(registry: Path, workspace_id: str, phase: str, identity: str, staged:
     workspace = workspaces.get(workspace_id)
     if workspace is None:
         raise LocalError("unknown_workspace")
+    from grokbot_mcp.ledger_archive import archived
+    if archived(workspace.root, identity, execution=phase == "execute"):
+        raise LocalError("archived_task")
     directory = _result_dir(phase)
     target = workspace.root / ".bridge" / directory / (identity + ".json")
     ledger_dir = workspace.root / ".bridge" / ("tasks_v2" if phase == "validate" else "executions")
@@ -132,7 +135,7 @@ def _check(registry: Path, workspace_id: str, phase: str, identity: str, staged:
     if record.get(state_key) == "running" and value["status"] == "pending":
         raise LocalError("result_transition_invalid")
     report = {"ok": True, "format_valid": True, "identity_valid": True,
-              "result_diagnosis": diagnosis(value, phase, expected=expected),
+              "result_diagnosis": diagnosis(value, phase, expected=expected, require_test_output=workspace.require_test_output),
               "staged_sha256": digest(raw), "destination": expected_path,
               "previous_status": previous["status"] if previous else None, "next_status": value["status"],
               "published": False, "bridge_accepted": False, "qa_accepted": False,

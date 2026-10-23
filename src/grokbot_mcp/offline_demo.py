@@ -103,7 +103,7 @@ def run_demo() -> dict:
                           "'case_count':r.testsRun,'exit_code':int(not r.wasSuccessful())})); sys.exit(not r.wasSuccessful())")
                 result = subprocess.run([sys.executable, "-I", "-B", "-X", "utf8", "-c",
                                          "import sys; sys.path.insert(0,sys.argv[1]); " + runner, str(root)], cwd=root,
-                                        capture_output=True, text=True, encoding="utf-8", timeout=30, shell=False)
+                                        capture_output=True, text=True, encoding="utf-8", timeout=30, shell=False, errors="replace")
                 _need(result.returncode == 0, "offline_fixture_test_failed")
                 measured = json.loads(result.stdout)
                 output = {"protocol_version": 1, "action": "execute_manifest", "execution_id": ex["execution_id"],

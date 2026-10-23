@@ -11,12 +11,47 @@ import re
 from pathlib import Path
 
 CATALOG: dict[str, dict] = {}
+ROUTINE_TIMEOUT_MESSAGE = (
+    "No remote result was observed. A possible cause is unfilled Routine registration values; "
+    "run grokbot-mcp routine-check --registry <registry> --workspace <workspace>. Do not resend. / "
+    "未观察到远端结果；可能是 Routine 未填入登记值。请运行 routine-check 本地检查，不要重发。"
+)
 
 
 def _add(codes, reason, next_step, where="local", blocks="setup submit"):
     for code in codes.split():
         CATALOG[code] = {"code": code, "reason": reason, "next_step": next_step,
                          "where": where, "blocks": blocks.split()}
+
+
+_add("routine_timeout_no_result", ROUTINE_TIMEOUT_MESSAGE,
+     "Review the local packet, then manually compare the remote Routine. / 核查本地包后人工对照远端 Routine。")
+_add("archived_task archive_incomplete archive_journal_invalid archive_evidence_changed archive_identity_mismatch archive_reason_required archive_late_result_risk",
+     "Archive recovery is guarded; retired IDs cannot be reused. / 归档恢复受守卫保护，已归档 ID 不可复用。",
+     "Use ledger-archive preview; resume an interrupted original plan with --confirm and any required --accept-late-result-risk. Never delete evidence or resend. / 使用 ledger-archive 预览；中断时确认续完原计划，必要时接受迟到风险；禁止删证据或重发。")
+_add("archive_cross_volume_unsupported", "The archive and workspace are on different volumes. / 归档与工作区不在同一卷。",
+     "This move-only command requires the same volume. Preserve the original evidence; do not move a live registry or resend to bypass refusal. / 本命令要求同卷移动；保留原证据，不要移动真实登记或重发来绕过拒绝。")
+_add("allowed_globs_disabled allowed_glob_invalid allowed_glob_unsafe_file allowed_glob_limit_exceeded allowed_glob_empty",
+     "Restricted expansion was refused. / 受限目录展开已拒绝。",
+     "Review allow_globs, glob_max_files and the explicit registry allow-list. / 核查 allow_globs、glob_max_files 与登记白名单。")
+
+
+_add("test_command_scope_mismatch", "Registered test applicability does not match all allowed files. / 登记测试命令不适用于本次文件范围。",
+     "Select an administrator-registered command matching this task; never silently substitute a different test. / 选择适用的已登记 ID，不要暗中替换测试。")
+_add("test_evidence_missing", "Required test output evidence is missing. / 缺少必需的测试输出证据。",
+     "Inspect the original result locally; preserve frozen evidence and never resend. / 本地核查原结果，保留冻结证据，不重发。")
+_add("test_command_template_missing test_file_outside_scope test_file_unsafe test_changed_files_empty invalid_test_argv invalid_test_applicability",
+     "The registered argv template or changed-file list cannot be safely expanded. / 登记参数模板或变更文件列表无法安全展开。",
+     "Review the registered array and exact in-scope paths locally. Never build shell text or scan other files as a fallback. / 本地核对登记数组与范围内路径，不拼接 shell，不回退到扫描其它文件。")
+
+
+_add("ledger_too_large", "Persisted JSON exceeds the 4 MiB byte limit; the read or write was refused. / JSON 超过 4 MiB 字节上限，已拒绝读写。",
+     "Preserve the original evidence and inspect its size locally. Do not truncate a ledger, replace frozen evidence, or resend. / 保留原证据并在本地核查大小；不要截断账本、替换冻结证据或重发。",
+     blocks="prepare submit claim acceptance")
+_add("invalid_argument", "A tool parameter name or type is invalid. / 工具参数名或类型无效。",
+     "Use accepted_arguments and the tool schema; get_status uses task_id or execution_id. / 按 accepted_arguments 和工具 schema 传参；查询使用 task_id 或 execution_id。")
+_add("internal_error", "An unexpected local operation failed; details were withheld. / 本地操作发生意外异常，敏感详情已隐藏。",
+     "Inspect the local diagnostic stream. Observe the original identity; do not retry a submission. / 查看本地诊断日志并观察原标识；不要重试提交。")
 
 
 _add("windows_required", "This bridge requires Windows. / 此桥仅支持 Windows。",
@@ -189,6 +224,8 @@ def public_report(report: dict) -> dict:
     items = report.get("findings")
     result["findings"] = [finding(item.get("code"), item.get("phase"), purpose)
                           for item in (items if isinstance(items, list) else []) if isinstance(item, dict)]
+    if any(item["code"] == "routine_timeout_no_result" for item in result["findings"]):
+        result["operator_message"] = ROUTINE_TIMEOUT_MESSAGE
     # Keep the legacy CLI summary, but make its scope explicit. No MCP fields change.
     # Selection defaults closed, including early errors, and survives re-serialization.
     result["submit_permitted"] = result["workspace_submit_prerequisites_met"]
@@ -338,6 +375,8 @@ def _collect(registry: Path, workspace_id: str, *, purpose="setup", export=False
                 add("invalid_task_id", "validation")
             else:
                 status = get_validation_status(workspace, task_id, observe_only=True)
+                if status.get("status") == "timeout" and status.get("result_observation") == "missing":
+                    add("routine_timeout_no_result", "validation")
                 for key in ("error", "integrity_error"):
                     if status.get(key):
                         add(status[key], "validation")
@@ -350,6 +389,8 @@ def _collect(registry: Path, workspace_id: str, *, purpose="setup", export=False
             from grokbot_mcp.execution.service import get_execution_status
             from grokbot_mcp.cancel_execution_cli import preview_cancellation
             status = get_execution_status(workspace, execution_id, observe_only=True, verify_current=True)
+            if status.get("status") == "timeout" and status.get("result_observation") == "missing":
+                add("routine_timeout_no_result", "execution")
             for key in ("error", "integrity_error"):
                 if status.get(key):
                     add(status[key], "execution")

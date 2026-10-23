@@ -6,6 +6,7 @@ from grokbot_mcp.observation import LedgerView, deadline, observation_lock, quer
 from grokbot_mcp.security.baseline import same_snapshot
 from grokbot_mcp.security.paths import is_uuid
 from grokbot_mcp.result_contract import diagnosis, result_identity
+from grokbot_mcp.strict_json import LedgerTooLarge
 
 
 def observe_execution(workspace, execution_id: str, *, observe_only=False, verify_current=False) -> dict:
@@ -14,8 +15,13 @@ def observe_execution(workspace, execution_id: str, *, observe_only=False, verif
         return _base(error="invalid_execution_id", status="unknown")
     store = _ledger(workspace)
     with observation_lock(store, observe_only):
+        from grokbot_mcp.ledger_archive import archived
+        if archived(workspace.root, execution_id, execution=True):
+            return _base(execution_id=execution_id, status="archived", error="archived_task")
         try:
             record = store.read(execution_id)
+        except LedgerTooLarge:
+            raise
         except (OSError, ValueError):
             return _base(execution_id=execution_id, error="missing_or_unreadable_execution", status="unknown")
         view = LedgerView(store, record, not observe_only)
@@ -62,7 +68,8 @@ def observe_execution(workspace, execution_id: str, *, observe_only=False, verif
         if read_error:
             result = _fail(view, execution_id, result, read_error, digest or "")
         elif parsed is not None:
-            result["result_diagnosis"] = diagnosis(parsed, "execute", expected=result_identity(workspace, "execute", record))
+            result["result_diagnosis"] = diagnosis(parsed, "execute", expected=result_identity(workspace, "execute", record),
+                                                   require_test_output=workspace.require_test_output)
             # All intermediate records must carry the same immutable identity.
             identity = (parsed.get("protocol_version") in (1, "1") and parsed.get("execution_id") == execution_id
                         and parsed.get("manifest_task_id") == record.get("manifest_task_id")

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from grokbot_mcp.tool_errors import guarded
 
 from grokbot_mcp.identity import runtime_identity
 from grokbot_mcp.execution_profile import report as environment_report
@@ -65,6 +66,7 @@ def _workspace(workspace_id: str) -> tuple[Workspace | None, dict[str, object] |
     return workspace, None, siblings
 
 
+@guarded
 def list_workspaces() -> dict[str, object]:
     path = default_registry_path()
     try:
@@ -107,6 +109,7 @@ def list_workspaces() -> dict[str, object]:
     return result
 
 
+@guarded
 def preflight(workspace_id: str) -> dict[str, object]:
     workspace, error, _siblings = _workspace(workspace_id)
     if error is not None or workspace is None:
@@ -175,9 +178,21 @@ def preflight(workspace_id: str) -> dict[str, object]:
     }
     if workspace.git_gate == "advisory":
         result["git_gate"] = "advisory"
+    # Optional local material summary; it never changes existing readiness keys.
+    from grokbot_mcp.routine_check import check, packets
+    from grokbot_mcp.local_safety import LocalError
+    try:
+        registry = default_registry_path()
+        if any(path.exists() for path, _kind in packets(registry, workspace)):
+            result["routine_check"] = check(registry, workspace_id)
+    except (OSError, ValueError, RegistryError, LocalError):
+        from grokbot_mcp.routine_check import SCOPE
+        result["routine_check"] = {"ok": False, "issues": ["routine_packet_unreadable"],
+                                   "scope": SCOPE, "remote_binding_verified": False}
     return result
 
 
+@guarded
 def prepare_task(
     workspace_id: str,
     task_type: str,
@@ -187,6 +202,7 @@ def prepare_task(
     test_command_id: str,
     execution_timeout: int | None = None,
     baseline_commit: str | None = None,
+    allowed_globs: list[str] | None = None,
 ) -> dict[str, object]:
     workspace, error, _siblings = _workspace(workspace_id)
     if error is not None or workspace is None:
@@ -214,6 +230,7 @@ def prepare_task(
             execution_timeout=execution_timeout,
             baseline_commit=baseline_commit,
             effective_baseline=str(git.get("head_text") or "") if workspace.git_gate == "advisory" else None,
+            **({"allowed_globs": allowed_globs} if allowed_globs is not None else {}),
         )
     except ManifestError as exc:
         return _closed(exc.code, workspace_id)
@@ -221,6 +238,7 @@ def prepare_task(
     return result
 
 
+@guarded
 def submit_validation_tool(workspace_id: str, task_id: str) -> dict[str, object]:
     workspace, error, _siblings = _workspace(workspace_id)
     if error is not None or workspace is None:
@@ -238,6 +256,7 @@ def submit_validation_tool(workspace_id: str, task_id: str) -> dict[str, object]
     return result
 
 
+@guarded
 def prepare_execution_tool(workspace_id: str, manifest_task_id: str) -> dict[str, object]:
     workspace, error, siblings = _workspace(workspace_id)
     if error is not None or workspace is None:
@@ -249,6 +268,7 @@ def prepare_execution_tool(workspace_id: str, manifest_task_id: str) -> dict[str
     return result
 
 
+@guarded
 def submit_execution_tool(workspace_id: str, execution_id: str) -> dict[str, object]:
     workspace, error, _siblings = _workspace(workspace_id)
     if error is not None or workspace is None:
@@ -273,6 +293,7 @@ def submit_execution_tool(workspace_id: str, execution_id: str) -> dict[str, obj
     return result
 
 
+@guarded
 def get_status(workspace_id: str, task_id: str = "", execution_id: str = "", *,
                observe_only: bool = False, verify_current: bool = False) -> dict[str, object]:
     workspace, error, _siblings = _workspace(workspace_id)
@@ -293,6 +314,7 @@ def get_status(workspace_id: str, task_id: str = "", execution_id: str = "", *,
     return payload
 
 
+@guarded
 def claim_for(workspace_id: str, execution_id: str) -> dict[str, object]:
     workspace, error, siblings = _workspace(workspace_id)
     if error is not None or workspace is None:

@@ -209,7 +209,7 @@ class ReviewFixTest(unittest.TestCase):
         c = self.c
         task = c.validated()
         path = c.root / '.bridge/execute_routine_status.json'
-        data = json.loads(path.read_text())
+        data = json.loads(path.read_text(encoding="utf-8"))
         data['binding']['workspace_id'] = 'other-workspace'
         c.put(path, data)
         self.assert_no_authorization(task)
@@ -218,7 +218,7 @@ class ReviewFixTest(unittest.TestCase):
         c = self.c
         task = c.validated()
         path = c.root / '.bridge/execute_routine_status.json'
-        data = json.loads(path.read_text())
+        data = json.loads(path.read_text(encoding="utf-8"))
         data['binding']['claim_entry'] = 'claim_dynamic.py'
         c.put(path, data)
         self.assert_no_authorization(task)
@@ -244,7 +244,7 @@ class ReviewFixTest(unittest.TestCase):
     def test_claim_v1_only_capabilities_do_not_prove_compatibility(self):
         c = self.c
         path = c.root / '.bridge/execute_routine_status.json'
-        data = json.loads(path.read_text())
+        data = json.loads(path.read_text(encoding="utf-8"))
         data['binding']['protocol_capabilities'] = ['manifest-v1', 'claim-once-v1']
         c.put(path, data)
         ws = load_registry(c.registry)[WORKSPACE_ID]
@@ -256,7 +256,7 @@ class ReviewFixTest(unittest.TestCase):
         claim = c.path('execution_claims', ex['execution_id'])
         c.mutate(claim, schema_version=1)
         ledger = c.path('executions', ex['execution_id'])
-        data = json.loads(ledger.read_text())
+        data = json.loads(ledger.read_text(encoding="utf-8"))
         data.pop('claim_sha256')
         c.put(ledger, data)
         c.change()

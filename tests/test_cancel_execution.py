@@ -31,7 +31,7 @@ class CancellationTest(unittest.TestCase):
         c = self.c
         c.mutate(c.path('executions', self.ex['execution_id']), binding_revision=None)
         binding_path = c.root / '.bridge/execute_routine_status.json'
-        data = json.loads(binding_path.read_text()); data.pop('binding'); c.put(binding_path, data)
+        data = json.loads(binding_path.read_text(encoding="utf-8")); data.pop('binding'); c.put(binding_path, data)
         original = {p: p.read_bytes() for p in (c.path('execution_baselines', self.ex['execution_id']),
                     c.path('results_v2', self.task['task_id']), c.path('tasks_v2', self.task['task_id']),
                     c.root / 'src/counter.py')}
@@ -42,7 +42,7 @@ class CancellationTest(unittest.TestCase):
         confirm_binding(c.registry, WORKSPACE_ID, 'execute', 'reuse')
         for p, raw in original.items():
             self.assertEqual(p.read_bytes(), raw)
-        record = json.loads(c.path('executions', self.ex['execution_id']).read_text())
+        record = json.loads(c.path('executions', self.ex['execution_id']).read_text(encoding="utf-8"))
         self.assertEqual(record['execution_state'], 'cancelled')
         self.assertEqual(record['submission_state'], 'not_sent')
         self.assertIsNone(record['request_attempted_at'])
@@ -79,7 +79,7 @@ class CancellationTest(unittest.TestCase):
         for kind in ('execution_claims', 'results_execute'):
             with self.subTest(kind=kind):
                 path = c.path(kind, self.ex['execution_id']); path.parent.mkdir(exist_ok=True)
-                path.write_text('{')
+                path.write_text('{', encoding="utf-8")
                 self.assertEqual(self.cancel()[0], 1)
                 path.unlink()  # Fixture cleanup only; never an operator recovery procedure.
 
@@ -99,12 +99,12 @@ class CancellationTest(unittest.TestCase):
     def test_incomplete_ledger_does_not_prove_unused_attempt(self):
         c = self.c
         path = c.path('executions', self.ex['execution_id'])
-        data = json.loads(path.read_text()); data.pop('request_attempted_at'); c.put(path, data)
+        data = json.loads(path.read_text(encoding="utf-8")); data.pop('request_attempted_at'); c.put(path, data)
         self.assertEqual(self.cancel()[0], 1)
 
     def test_cancellation_needs_no_credentials_or_open_switch(self):
         c = self.c
-        data = json.loads(c.registry.read_text()); data['workspaces'][0]['writes_enabled'] = False; c.put(c.registry, data)
-        (c.registry.parent / 'execution_switch.json').write_text('{"enabled":false}')
+        data = json.loads(c.registry.read_text(encoding="utf-8")); data['workspaces'][0]['writes_enabled'] = False; c.put(c.registry, data)
+        (c.registry.parent / 'execution_switch.json').write_text('{"enabled":false}', encoding="utf-8")
         with patch('grokbot_mcp.credentials.backend.load_for', side_effect=AssertionError('credentials')):
             self.assertEqual(self.cancel()[0], 0)
