@@ -267,3 +267,20 @@ No actual Routine is edited by this source update. This template correction does
 not change `policy_fingerprint`: bindings check policy and capabilities, not a
 hash of Routine prose. Default/false bodies keep their bytes under the same
 version banner; upgrading to 0.1.5b3 changes the generated version banner.
+
+## Read-only test command registration check
+
+Run `python -B -m grokbot_mcp.admin_cli registry-check --registry <registry.json>`;
+add `--workspace <id>` to select one workspace. JSON reports each registered
+`argv` and `rerun.argv` check as `ok`, `missing`, or `unchecked`, with stable codes
+and command IDs. It checks cwd, explicit executable paths inside the registered
+root, unittest module files/packages, and explicit test files. Relative
+`rerun.env.PYTHONPATH` directories are additional module roots.
+
+This is a filesystem hint, not a test run or import-resolution guarantee. Bare
+executable names, unsupported arguments and paths outside the registered root
+remain unchecked. No PATH search, imports, subprocesses, credential access or
+switch changes occur; forbidden/protected paths and links are refused. An invalid
+registry (including a rerun cwd already invalid at load time) retains its existing
+load refusal. `grok_preflight.test_command_check` adds item totals, missing counts
+and missing command IDs/codes without changing `local_ready` or authorizing sends.

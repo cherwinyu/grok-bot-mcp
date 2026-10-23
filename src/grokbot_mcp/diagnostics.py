@@ -110,7 +110,7 @@ _add("python_unsupported", "Python 3.12 or newer is required. / Python 版本过
 _add("python_interpreter_invalid", "The running interpreter path is unavailable. / 当前解释器路径不可用。",
      "Use the installation's Scripts/python.exe absolute path; do not copy an activated shell's generic python command.")
 _add("installation_unavailable installation_mismatch", "The isolated interpreter cannot load this installed bridge and pinned MCP dependency. / 安装或解释器不匹配。",
-     "Create a separate venv with Python 3.12 and install the checked-out source using that venv's python -m pip install .; do not replace an active installation.")
+     "Check the selected interpreter and installed/source versions. To refresh stale editable metadata, use that interpreter's python -m pip install -e . from the reviewed source; for a wheel installation, reinstall the matching wheel. / 核对所选解释器与安装、源码版本。可编辑安装元数据过期时，在已审查源码目录用该解释器运行 python -m pip install -e .；wheel 安装则重新安装对应 wheel。")
 _add("git_missing git_unavailable", "Git is missing or cannot run. / Git 缺失或无法运行。",
      "Install Git for Windows, open a new PowerShell and check git --version; rerun the same setup command.")
 _add("registry_missing", "No registry was found. grok_list_workspaces returns ok=false rather than an empty workspace list. / 尚未建立登记配置；列出工作区不会假装成空列表。",

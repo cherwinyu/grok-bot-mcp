@@ -228,3 +228,17 @@ claim 和执行核对要求当前仍启用本地校验且指纹一致，否则�
 修改 Validate 正文，也不会自动修改真实 Routine。模板文本不参与
 `policy_fingerprint`；绑定核验策略和能力而非正文哈希，因此模板修正不改变指纹。
 false/省略时，在相同版本横幅下字节保持一致；升级到 0.1.5b3 会更新生成材料的版本横幅。
+
+## 测试命令登记的只读检查
+
+运行 `python -B -m grokbot_mcp.admin_cli registry-check --registry <registry.json>`；
+加 `--workspace <id>` 可只检查一个工作区。JSON 对登记的 `argv` 和 `rerun.argv`
+各项检查返回 `ok`、`missing` 或 `unchecked`，并附稳定错误码和命令 ID。检查内容为
+cwd、登记根内的显式可执行文件路径、unittest 模块文件/包及显式测试文件；
+`rerun.env.PYTHONPATH` 中相对 cwd 的目录作为额外模块根。
+
+这是文件系统提示，不是测试运行或导入解析保证。裸命令名、不支持的参数及根外路径
+保持未检查。不搜索 PATH、不导入目标、不启动子进程、不访问凭据、不更改开关；
+禁区、保护路径与链接会被拒绝。无效登记（包括加载时 rerun cwd 已失效）仍保留
+原有加载拒绝行为。`grok_preflight.test_command_check` 附加检查项总数、缺失数及
+缺失命令 ID/错误码，不改变 `local_ready`，不授权发送。
