@@ -7,7 +7,7 @@ from pathlib import Path
 
 from grokbot_mcp.local_safety import LocalError, safe_path, read_document
 from grokbot_mcp.materials import render_routine
-from grokbot_mcp.registry import load_registry, policy_fingerprint, workspace_profile
+from grokbot_mcp.registry import load_registry, policy_fingerprint, routine_profile
 from grokbot_mcp.routine import routine_readiness, MODES
 from grokbot_mcp.setup_environment import interpreter
 from grokbot_mcp.strict_json import decode, MAX_BYTES
@@ -45,7 +45,7 @@ def inspect_text(text: str, workspace, registry: Path, python: Path, kind: str) 
         profile, binding = [decode(block.encode("utf-8")) for block in blocks[:2]]
     except (ValueError, UnicodeError):
         return sorted(set(errors + ["routine_packet_invalid"]))
-    expected = workspace_profile(workspace)
+    expected = routine_profile(workspace)
     expected["root"] = str(workspace.root)
     for key in ("validate_credential_target", "execute_credential_target"):
         expected.pop(key)
@@ -54,6 +54,13 @@ def inspect_text(text: str, workspace, registry: Path, python: Path, kind: str) 
     expected = json.loads(json.dumps(expected))
     if any(profile.get(key) != value for key, value in expected.items()):
         errors.append("routine_profile_mismatch")
+    if workspace.allowed_prefixes:
+        if (profile.get("allowed_prefixes") != expected["allowed_prefixes"]
+                or profile.get("policy_fingerprint") != policy_fingerprint(workspace)
+                or "allowed_files" in profile):
+            errors.append("routine_prefix_policy_mismatch")
+    elif profile.get("allowed_prefixes"):
+        errors.append("routine_prefix_policy_mismatch")
     # Explicit defaults must not conceal a stale non-default packet value.
     for key, value in (("git_gate", workspace.git_gate), ("allow_globs", workspace.allow_globs),
                        ("glob_max_files", workspace.glob_max_files), ("test_selection", workspace.test_selection),

@@ -85,6 +85,7 @@ def grok_prepare_task(
     execution_timeout: int | None = None,
     baseline_commit: str | None = None,
     allowed_globs: list[str] | None = None,
+    create_files: list[str] | None = None,
 ) -> dict:
     """Write one local manifest. The server owns the root, id, and file policy."""
     return facade.prepare_task(
@@ -97,6 +98,7 @@ def grok_prepare_task(
         execution_timeout,
         baseline_commit,
         **({"allowed_globs": allowed_globs} if allowed_globs is not None else {}),
+        **({"create_files": create_files} if create_files is not None else {}),
     )
 
 
@@ -131,7 +133,7 @@ def grok_get_status(workspace_id: str, task_id: str = "", execution_id: str = ""
 
 
 def main() -> None:
-    if len(sys.argv) > 1 and sys.argv[1] in {"ledger-archive", "routine-check"}:
+    if len(sys.argv) > 1 and sys.argv[1] in {"ledger-archive", "routine-check", "registry-prefixes"}:
         from grokbot_mcp.admin_cli import main as admin_main
         raise SystemExit(admin_main(sys.argv[1:]))
     mcp.run(transport="stdio")

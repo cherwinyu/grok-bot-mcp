@@ -7,6 +7,7 @@ import os
 from grokbot_mcp.execution_profile import report as profile_report
 from grokbot_mcp.identity import digest, compare_identity
 from grokbot_mcp.local_safety import LocalError, read_document, json_bytes, safe_path
+from grokbot_mcp.security.prefixes import manifest_scope_valid, prefix_json
 from grokbot_mcp.registry import load_registry, policy_fingerprint, execution_switch_enabled
 from grokbot_mcp.security.paths import is_uuid, normalize_repo_path
 
@@ -52,7 +53,7 @@ def task_scope(workspace, task_id: str, execution_id: str | None = None) -> dict
             or document.get("forbidden_files") != list(workspace.forbidden_files)):
         raise LocalError("result_manifest_mismatch")
     allowed = document.get("allowed_files")
-    if (type(allowed) is not list or not all(type(x) is str and x in workspace.allowed_files for x in allowed)
+    if (type(allowed) is not list or not manifest_scope_valid(workspace, document)
             or len(set(allowed)) != len(allowed)):
         raise LocalError("result_manifest_mismatch")
     if any(normalize_repo_path(name) != name for name in allowed):
@@ -100,6 +101,8 @@ def preview(registry: Path, workspace_id: str, *, task_id: str | None = None,
     }
     if workspace.git_gate == "advisory":
         report["git_gate"] = "advisory"
+    if workspace.allowed_prefixes:
+        report["allowed_prefixes"] = prefix_json(workspace)
     if local_details:
         report["local_details"] = {"registry": str(registry), "root": str(workspace.root),
             "registered_allowed_files": list(workspace.allowed_files), "protected_files": list(workspace.forbidden_files)}

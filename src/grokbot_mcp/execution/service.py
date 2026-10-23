@@ -11,13 +11,14 @@ from typing import Callable
 from grokbot_mcp.credentials.windows import CredentialError
 from grokbot_mcp.errors.http_errors import diagnosis_for_outcome
 from grokbot_mcp.manifest.store import ManifestError, load_manifest
+from grokbot_mcp.security.prefixes import manifest_scope_valid, resolve_task_files, policy_allows
 from grokbot_mcp.registry import Workspace, policy_fingerprint
 from grokbot_mcp.routine import routine_readiness
 from grokbot_mcp.execution.evidence import verify_evidence
 from grokbot_mcp.validation.evidence import verify_validation_decision
 from grokbot_mcp.observation import deadline
 from grokbot_mcp.result_contract import diagnosis, result_identity, validate_result, ContractError
-from grokbot_mcp.security.baseline import capture_snapshot, execution_delta, load_snapshot, replace_snapshot, same_snapshot, write_snapshot
+from grokbot_mcp.security.baseline import watched_paths, prefix_snapshot_options, capture_snapshot, execution_delta, load_snapshot, replace_snapshot, same_snapshot, write_snapshot
 from grokbot_mcp.security.gitcheck import git_error, git_snapshot, workspace_git_rejection
 from grokbot_mcp.security.paths import is_reparse_point, is_uuid, normalize_repo_path, normalize_policy_path, PathRejected
 from grokbot_mcp.strict_json import LedgerTooLarge, check_size
@@ -129,7 +130,7 @@ def assess(workspace: Workspace, task_id: str, *, check_workspace: bool = True) 
                 and (not isinstance(document.get("baseline_commit"), str)
                      or len(document["baseline_commit"]) != 40))
             or not isinstance(allowed, list) or not all(isinstance(x, str) for x in allowed)
-            or any(x not in workspace.allowed_files for x in allowed)
+            or not manifest_scope_valid(workspace, document)
             or len(set(allowed)) != len(allowed) or command is None
             or document.get("task_type") not in command.task_types):
         return {"ok": False, "error": "manifest_policy_mismatch", "manifest_sha256": digest}
@@ -222,10 +223,11 @@ def prepare_execution(workspace: Workspace, task_id: str, sibling_roots: list[Pa
             return _base(manifest_task_id=task_id, error="execution_id_reused")
         document = report["document"]
         assert isinstance(document, dict)
-        watched = list(workspace.allowed_files) + list(workspace.forbidden_files)
+        watched = watched_paths(workspace, document)
         try:
             snapshot = capture_snapshot(
                 workspace.root, watched, include_ignored=workspace.git_gate != "advisory",
+                **prefix_snapshot_options(workspace),
             )
             baseline_sha = write_snapshot(_bridge(workspace) / "execution_baselines", execution_id, snapshot)
         except ValueError as exc:
@@ -385,10 +387,11 @@ def claim_execution(workspace: Workspace, execution_id: str, sibling_roots: list
         document = report["document"]
         assert isinstance(document, dict)
         if workspace.git_gate == "advisory":
-            watched = list(workspace.allowed_files) + list(workspace.forbidden_files)
+            watched = watched_paths(workspace, document)
             try:
                 snapshot = capture_snapshot(
                     workspace.root, watched, include_ignored=workspace.git_gate != "advisory",
+                    **prefix_snapshot_options(workspace),
                 )
             except ValueError as exc:
                 return {"ok": False, "error": str(exc)}
@@ -402,10 +405,12 @@ def claim_execution(workspace: Workspace, execution_id: str, sibling_roots: list
                 return {"ok": False, "error": str(exc)}
             record = store.update(execution_id, baseline_sha256=baseline_sha)
         try:
-            allowed = resolve_exact_files(workspace.root, list(document.get("allowed_files") or []), workspace.forbidden_files)
+            allowed = resolve_task_files(workspace, document)
         except TargetRejected as exc:
             return {"ok": False, "error": exc.code}
         claim_file.parent.mkdir(parents=True, exist_ok=True)
+        creates = document.get("scope_expansion", {}).get("create_files")
+        target_check = "prospective" if creates else "present"
         payload = {
             "schema_version": 2,
             "workspace_id": workspace.workspace_id,
@@ -418,7 +423,8 @@ def claim_execution(workspace: Workspace, execution_id: str, sibling_roots: list
             "manifest_sha256": record.get("manifest_sha256"),
             "validation_result_sha256": record.get("validation_result_sha256"),
             "allowed_files": allowed,
-            "target_check": "present",
+            "target_check": target_check,
+            **({"create_files": creates} if creates is not None else {}),
             "enforcement": "advisory_precheck",
             "claimed_at": utc_now(),
         }
@@ -456,12 +462,13 @@ def claim_execution(workspace: Workspace, execution_id: str, sibling_roots: list
             "workspace_id": workspace.workspace_id,
             "allowed_files": allowed,
             "forbidden_files": list(workspace.forbidden_files),
+            **({"create_files": creates} if creates is not None else {}),
             "baseline_commit": document.get("baseline_commit"),
             **({"git_gate": "advisory", "existing_changes": payload["existing_changes"]}
                if workspace.git_gate == "advisory" else {}),
             "test_command_id": document.get("test_command_id"),
             "acceptance_criteria": document.get("acceptance_criteria"),
-            "target_check": "present",
+            "target_check": target_check,
             "enforcement": "advisory_precheck",
         }
 
@@ -529,6 +536,18 @@ def _interpret(
     out_of_scope = sorted({name for name in set(reported) | set(delta) if match_path(name) not in allowed_keys})
     if workspace.git_gate == "advisory":
         result["out_of_scope_changes"] = out_of_scope
+    from grokbot_mcp.execution.evidence import creation_evidence
+    try:
+        not_created = creation_evidence(workspace, document, baseline, current, reported)
+    except ValueError as exc:
+        return _fail(store, execution_id, result, str(exc), result_sha256)
+    if not_created is not None:
+        result["not_created"] = not_created
+        if "not_created" in parsed and parsed["not_created"] != not_created:
+            return _fail(store, execution_id, result, "result_inconsistent", result_sha256)
+    elif "not_created" in parsed:
+        return _fail(store, execution_id, result, "result_inconsistent", result_sha256)
+    if workspace.git_gate == "advisory":
         from grokbot_mcp.security.git_review import review
         result["git_review"] = review(baseline, current, delta, reported, list(allowed),
                                       getattr(workspace, "other_prefixes", ()))
@@ -574,13 +593,15 @@ def _interpret(
     if parsed.get("status") != "succeeded":
         return _fail(store, execution_id, result, "execution_failed", result_sha256)
     task_type = document.get("task_type") if isinstance(document, dict) else None
-    if task_type == "code_change" and not allowed_keys <= delta_keys:
+    optional_creates = {match_path(n) for n in document.get("scope_expansion", {}).get("create_files", [])}
+    if task_type == "code_change" and not (allowed_keys - optional_creates) <= delta_keys:
         return _fail(store, execution_id, result, "result_inconsistent", result_sha256)
     verified_at = utc_now()
     store.update(execution_id, execution_state="succeeded", qa_state="not_reviewed", error=None,
                  result_sha256=result_sha256, verified_at=verified_at, historical_status="succeeded",
                  terminal=True, verified_snapshot=current, late_result=deadline(record)["deadline_exceeded"],
                  verified_summary={"changed_files": delta, "code_modified": bool(delta),
+                                   **({"not_created": not_created} if not_created is not None else {}),
                                    **({"out_of_scope_changes": out_of_scope, "git_review": result["git_review"]}
                                       if workspace.git_gate == "advisory" else {}),
                                    "test_passed": passed, "test_failed": failed, "godot_exit_code": godot_exit_code,
@@ -608,8 +629,12 @@ def _reported_files(value: object, workspace: Workspace, *, advisory: bool = Fal
                     normalize_repo_path(unicodedata.normalize("NFC", item)))
         except Exception:
             return None
-        if not advisory and _outside(text, {unicodedata.normalize("NFC", name) for name in workspace.allowed_files}, workspace.forbidden_files):
-            return None
+        if not advisory:
+            if getattr(workspace, "allowed_prefixes", ()):
+                if not policy_allows(workspace, text) or _blocked(text, set(workspace.forbidden_files)):
+                    return None
+            elif _outside(text, {unicodedata.normalize("NFC", name) for name in workspace.allowed_files}, workspace.forbidden_files):
+                return None
         names.append(text)
     return names
 
@@ -636,7 +661,7 @@ def _fail(store: JsonLedger, execution_id: str, result: dict[str, object], code:
     summary = {"result_diagnosis": result.get("result_diagnosis")}
     if isinstance(result.get("out_of_scope_changes"), list):
         summary["out_of_scope_changes"] = result["out_of_scope_changes"]
-    for key in ("git_review", "tests"):
+    for key in ("git_review", "tests", "not_created"):
         if key in result:
             summary[key] = result[key]
     store.update(execution_id, execution_state=state, qa_state="rejected", error=code,

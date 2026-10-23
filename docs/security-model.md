@@ -42,3 +42,7 @@ The validate target is never used as the execute key, and the reverse is also re
 ## Quota and on-demand
 
 The bridge never enables on-demand billing and never changes a subscription. `quota_exhausted_confirmed` is set only when the response text matches an explicit exhaustion phrase. A bare HTTP 400 stays `http_400_unknown` or a more specific non-quota category.
+
+## Directory authorization
+
+Optional `allowed_prefixes` authorizes literal directory/extension sets; each task and claim still carries an exact file list. Prospective `create_files` cannot override forbidden/protected policy, and `.git`/`.bridge` segments are permanently excluded. Administrators remain responsible for `.cursor`, `AGENTS.md` and private-path exclusions. Existing parents are checked for symlinks, junctions and reparse points, but these application-level checks are not an OS sandbox or protection from concurrent filesystem replacement. Prefix snapshots omit ordinary ignored cache trees; explicit watched protections remain. Newly observed unreported out-of-task additions use the advisory report (strict refuses); agent-reported new out-of-task files are refused. No permission preview, migration copy or prefix grant authorizes a send or retry.

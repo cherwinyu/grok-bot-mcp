@@ -19,7 +19,7 @@ from grokbot_mcp.credentials.backend import status_for
 from grokbot_mcp.registry import (
     RegistryError, _workspace, default_registry_path, execution_switch_enabled,
     load_registry, switch_path,
-    workspace_profile,
+    routine_profile,
 )
 from grokbot_mcp.routine import MODES, confirmation, read_routine, routine_readiness
 from grokbot_mcp.security.gitcheck import git_error, git_snapshot, workspace_git_rejection
@@ -147,7 +147,7 @@ def generate(registry: Path, workspace_id: str, mode: str = "reuse") -> Path:
     workspace = load_registry(registry)[workspace_id]
     safe_path(workspace.root)
     safe_path(registry)
-    profile = workspace_profile(workspace)
+    profile = routine_profile(workspace)
     if workspace.git_gate == "strict":
         profile.pop("git_gate")
     profile["root"] = str(workspace.root)

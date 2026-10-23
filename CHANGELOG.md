@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add opt-in directory authorization (`allowed_prefixes`), exact prospective `create_files`, measured `not_created`, prefix-aware Routine packets and read-only `registry-prefixes` migration previews. Defaults preserve existing bytes; no version change. / 增加可选目录授权、新建文件声明、未创建清单、前缀模板与只读迁移预览；缺省兼容，不升版本。
+
 - Harden advisory path normalization (including Git octal UTF-8 quoting), case-insensitive forbidden checks and NFC result comparisons. Strict snapshot serialization is unchanged. / 加固 advisory 路径、Git 八进制 UTF-8 解码、禁区大小写匹配及结果 NFC 比较；strict 快照序列化不变。
 - Refuse oversized persisted JSON before writing and expose `ledger_too_large` on read/write boundaries. Return structured tool argument/internal errors without payloads or tracebacks. / 超限 JSON 写前拒绝并返回明确错误；工具参数及意外异常返回脱敏结构化诊断。
 - Declare UTF-8 file/subprocess encodings and collect only top-level tests with bare pytest; Windows CI no longer sets `PYTHONUTF8`. / 明确文件与子进程编码；默认 pytest 仅收集顶层测试；Windows CI 不再设置 `PYTHONUTF8`。 See [hardening notes](docs/hardening.md) / [加固说明](docs/hardening.zh-CN.md).

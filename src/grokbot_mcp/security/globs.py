@@ -8,6 +8,7 @@ from grokbot_mcp.manifest.store import ManifestError
 from grokbot_mcp.security.gitread import run_git
 from grokbot_mcp.security.paths import normalize_repo_path, normalize_policy_path, PathRejected
 from grokbot_mcp.security.targets import _require_existing_file, TargetRejected
+from grokbot_mcp.security.prefixes import policy_allows
 
 
 def parse_glob(value: str) -> tuple[str, str]:
@@ -36,7 +37,6 @@ def expand(workspace, patterns: list[str]) -> list[str]:
     result = run_git(workspace.root, ["ls-files", "--stage", "-z"], subprocess.run)
     if result.returncode:
         raise ManifestError("git_status_failed")
-    policy = set(workspace.allowed_files)
     forbidden = [normalize_policy_path(p, casefold=True) for p in
                  (*workspace.forbidden_files, workspace.protected_file, ".git", ".bridge")]
     found = set()
@@ -55,7 +55,7 @@ def expand(workspace, patterns: list[str]) -> list[str]:
             continue
         if any(key == p or key.startswith(p + "/") for p in forbidden):
             continue
-        if name not in policy:
+        if not policy_allows(workspace, name):
             continue
         if mode not in {"100644", "100755"} or stage != "0":
             raise ManifestError("allowed_glob_unsafe_file")

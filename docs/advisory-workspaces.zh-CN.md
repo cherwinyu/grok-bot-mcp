@@ -21,9 +21,51 @@
 
 `grok_prepare_task` 增加可选 `allowed_globs`，例如 `["src/**/*.py", "docs/**"]`。继续传入 `allowed_files`（全部用 glob 选择时传 `[]`）、测试命令 ID 及原有必填参数。仅接受 `dir/**` 和 `dir/**/*.ext`，目录前缀与扩展名必须是字面量。绝对路径、盘符、反斜杠、遍历、空或点路径段、字符类、其它通配符、第二个或位置不合规的 `**` 均拒绝。
 
-展开只读取本地 Git 索引，与 registry 的显式白名单取交集，结果只包含已存在的普通文件。未跟踪、已删除、禁止/保护路径的后代及含 `.git`/`.bridge` 路径段的文件均排除。命中的符号链接、联结点/reparse 路径、硬链接、子模块及未解决的索引阶段会被拒绝。不做文件系统 glob 遍历，也不扩大策略授权。无匹配即报错；展开结果及其与显式文件的最终并集均须在配置上限内，超限整体拒绝，不截断。
+展开只读取本地 Git 索引，与 registry 的精确文件或前缀策略取交集，结果只包含已存在的普通文件。未跟踪、已删除、禁止/保护路径的后代及含 `.git`/`.bridge` 路径段的文件均排除。命中的符号链接、联结点/reparse 路径、硬链接、子模块及未解决的索引阶段会被拒绝。不做文件系统 glob 遍历，也不扩大策略授权。无匹配即报错；展开结果及其与显式文件的最终并集均须在配置上限内，超限整体拒绝，不截断。
 
 manifest 的 `allowed_files` 仍是显式清单。启用展开的 manifest 另记 `scope_expansion.allowed_globs` 和 `scope_expansion.expanded_files`，提交时复制到验证任务账本。prepare 返回完整最终清单和展开审计，并给出 `action_required: "confirm_expanded_files"` 及含文件数的操作提示。显式提交验证前必须复核完整清单；此提示不会建立新的授权机制。既有仅用显式文件的调用行为与返回字段不变。
+
+## 目录级授权
+
+registry 可选配置 `"allowed_prefixes": [{"prefix": "docs/", "exts": [".md"]}]`。
+`allowed_files` 和 `allowed_prefixes` 各自可以为空，但不能同时为空。prefix 是以 `/`
+结尾的字面量相对目录，exts 是非空、以 `.` 开头的字面量后缀清单。路径做 Unicode NFC
+规范化；拒绝遍历、空/点段、盘符、反斜杠、通配符、Windows 设备别名及 `.git`/`.bridge`
+路径段，保留已有路径准确拼写和符号链接、联结点/reparse、硬链接检查。`.cursor`、
+`AGENTS.md` 及私人路径由管理员配置到 `forbidden_files`。
+
+准备新文件时传入 `grok_prepare_task(..., allowed_files=[], create_files=["docs/new.md"], ...)`。
+每个新文件必须同时匹配前缀和扩展名，且不能覆盖 forbidden/protected 禁区。最终任务清单是
+调用者所选 `allowed_files`、`create_files`、`allowed_globs` 索引展开结果的并集；glob
+匹配现在可由登记文件或前缀授权。收到 `action_required: "confirm_expanded_files"` 时
+逐项审核完整返回清单；manifest 在 `scope_expansion.create_files` 记录声明。新建数量和
+最终并集均受 `glob_max_files` 限制，超限整体拒绝。
+
+非空前缀集合按规范化排序 JSON 参与 `policy_fingerprint`；缺省空集合不改变旧指纹。
+在已授权前缀内新增磁盘文件不改指纹、不要求重新绑定。修改登记的精确文件例外或其它策略
+字段仍改变策略身份。启用前缀的 Routine 包只内嵌前缀集合与指纹，不内嵌完整登记文件清单；
+具体任务范围及新建声明以成功 claim JSON 为准，`routine-check` 核验一致性。未设置前缀时
+保留旧包、manifest 和结果格式。
+
+claim 快照包含前缀内已跟踪及未忽略的未跟踪文件。不会仅因目录授权就把普通 gitignored
+缓存树写入账本；显式监测的禁止/保护/任务路径仍保留检查。执行后观察到、但未由代理报告
+的任务外新增文件，advisory 记为 `out_of_scope_changes`，strict 拒绝。代理在 `changed_files`
+报告的新建文件必须在任务清单内。声明后仍未创建的文件由桥接器在执行摘要列为 `not_created`，
+仅声明了 `create_files` 的任务出现此字段，缺失本身不判失败。claim-once、冻结证据、禁止
+重发的规则不变。
+
+管理员先只读预览目录折叠建议：
+
+```powershell
+grokbot-mcp registry-prefixes --registry $Registry --workspace $Workspace
+# 审核扩大的目录授权后，可在登记工作区外指定一个尚不存在的副本：
+grokbot-mcp registry-prefixes --registry $Registry --workspace $Workspace --write-to $NewRegistryCopy
+```
+
+辅助命令按直接父目录和扩展名分组，根目录文件及无扩展名文件保留为精确例外，打印新旧
+指纹。缺省只读；`--write-to` 仅排他新建副本，不覆盖原 registry 或已有目标、不读凭据、
+不发送请求、不改绑定或开关。采用副本及确认受影响的 Routine 绑定属于另行的管理员操作。
+目录授权扩大的是应用层策略，不是 OS 权限，也不是 OS 沙箱。
 
 ## 本地 Routine 预检
 

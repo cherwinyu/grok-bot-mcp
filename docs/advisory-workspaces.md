@@ -21,9 +21,60 @@ Registry paths, test commands and files must describe the actual administrator-r
 
 `grok_prepare_task` adds optional `allowed_globs`, for example `["src/**/*.py", "docs/**"]`. Continue supplying `allowed_files` (use `[]` when all selection comes from globs), the test command ID and the existing required arguments. Only `dir/**` and `dir/**/*.ext` are accepted, with a literal directory prefix and extension. Absolute paths, drives, backslashes, traversal, empty/dot components, character classes, other wildcards and a second/misplaced `**` are refused.
 
-Expansion reads the local Git index, intersects it with the registry's explicit allow-list, and returns only existing ordinary files. Untracked, deleted, forbidden/protected descendants and `.git`/`.bridge` components are excluded. Selected symlinks, junction/reparse paths, hardlinks, submodules and unresolved index stages are refused. No filesystem glob walk or policy extension occurs. No matches is an error. Both expansion and the final union with explicit files must fit the configured limit; exceeding it refuses the entire operation without truncation.
+Expansion reads the local Git index, intersects it with the registry's exact-file or prefix policy, and returns only existing ordinary files. Untracked, deleted, forbidden/protected descendants and `.git`/`.bridge` components are excluded. Selected symlinks, junction/reparse paths, hardlinks, submodules and unresolved index stages are refused. No filesystem glob walk or policy extension occurs. No matches is an error. Both expansion and the final union with explicit files must fit the configured limit; exceeding it refuses the entire operation without truncation.
 
 The manifest still contains explicit `allowed_files`. Opted-in manifests additionally record `scope_expansion.allowed_globs` and `scope_expansion.expanded_files`, copied into the validation task ledger on submission. Prepare returns both the complete final file list and that audit, with `action_required: "confirm_expanded_files"` and an operator message containing the file count. Review the full list before explicitly submitting validation; this message does not create a new authorization mechanism. Existing explicit-only calls retain their behavior and response fields.
+
+## Directory authorization
+
+A registry may opt into `"allowed_prefixes": [{"prefix": "docs/", "exts": [".md"]}]`.
+`allowed_files` and `allowed_prefixes` may each be empty, but not both. Prefixes are
+literal relative directories ending in `/`; extension lists are nonempty literal
+suffixes starting with `.`. Paths normalize to Unicode NFC. No traversal, empty/dot
+segments, drives, backslashes, wildcards, Windows device aliases or `.git`/`.bridge`
+segments are accepted. Exact existing component spelling and reparse/hardlink checks
+remain enforced. Configure `.cursor`, `AGENTS.md` and private paths in `forbidden_files`.
+
+Declare prospective exact files with `grok_prepare_task(..., allowed_files=[],
+create_files=["docs/new.md"], ...)`. Each creation must match a prefix and extension,
+without overriding forbidden/protected paths. The task scope is the union of caller
+selected `allowed_files`, `create_files` and index-expanded `allowed_globs`; glob
+matches may now be authorized by exact registry files or prefixes. Review the complete
+returned `allowed_files` when `action_required` is `confirm_expanded_files`. Creations
+are audited in `scope_expansion.create_files`. The creation count and final union
+must fit `glob_max_files`; rejection is whole-request, never truncation.
+
+The normalized, sorted prefix policy participates in `policy_fingerprint` only when
+nonempty. Adding files on disk within that policy does not change the fingerprint or
+require rebinding. Changes to registered exact-file exceptions or other policy fields
+still change policy identity. Prefix-enabled Routine packets embed the prefixes and
+fingerprint instead of the full registry file list; the successful claim JSON supplies
+the exact task list and creation declarations. `routine-check` checks this consistency.
+Absent prefix configuration retains the previous packet, manifest and result format.
+
+Claim snapshots include tracked and nonignored untracked prefix files. Ordinary ignored
+cache trees are not enumerated into the ledger merely because a prefix covers them;
+explicitly watched forbidden/protected/task files retain their checks. Newly observed
+unreported out-of-task files remain advisory `out_of_scope_changes`; strict mode rejects
+them. An agent-reported newly created file outside the task list is refused. Optional
+creations left absent are measured as `not_created` in the verified execution summary,
+only for tasks declaring `create_files`; that absence alone does not fail the task.
+This does not relax claim-once, frozen evidence or no-resend behavior.
+
+Preview migration locally without reading credentials or sending requests:
+
+```powershell
+grokbot-mcp registry-prefixes --registry $Registry --workspace $Workspace
+# After reviewing the broader grants, create a NEW copy outside registered workspaces:
+grokbot-mcp registry-prefixes --registry $Registry --workspace $Workspace --write-to $NewRegistryCopy
+```
+
+The helper groups exact files by their immediate directory and extension, retains
+root-level or extensionless files as exact exceptions, and prints old/new fingerprints.
+Preview is read-only. `--write-to` exclusively creates a new registry copy, never
+replaces the original or an existing destination, changes a binding or enables a switch.
+The copy is a proposal; adopting it and confirming affected Routine bindings is a
+separate administrator operation. Directory grants broaden policy, not OS permissions.
 
 ## Local Routine check
 

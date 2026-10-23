@@ -8,7 +8,7 @@ import os
 import subprocess
 from pathlib import Path
 
-from grokbot_mcp.security.paths import is_reparse_point, is_uuid, normalize_policy_path
+from grokbot_mcp.security.paths import is_reparse_point, is_uuid, normalize_policy_path, PathRejected
 from grokbot_mcp.strict_json import check_size, MAX_BYTES, decode
 
 _SKIP_EXACT = {".bridge"}
@@ -88,6 +88,7 @@ def capture_snapshot(
     runner=subprocess.run,
     *,
     include_ignored: bool = True,
+    prefix_dirs: tuple[str, ...] = (),
 ) -> dict[str, object]:
     head = _run(root, ["rev-parse", "HEAD"], runner)
     status = _run(root, ["status", "--porcelain=v1", "--ignored", "--untracked-files=all"], runner)
@@ -107,7 +108,26 @@ def capture_snapshot(
     if not include_ignored:
         ignored = [name for name in ignored if _under_watched(name, watched)]
     hashes: dict[str, str | None] = {}
+    if prefix_dirs:
+        # Index + untracked candidates only. Never walk ignored build/cache trees.
+        listing = _run(root, ["ls-files", "--cached", "--others", "--exclude-standard", "-z"], runner)
+        if listing.returncode != 0:
+            raise ValueError("git_status_failed")
+        names = [normalize_policy_path(n) for n in (listing.stdout or "").split("\0") if n]
+        watched = list(dict.fromkeys([*watched, *(n for n in names if _under_watched(n, list(prefix_dirs))
+                                                  and not _skipped(n))]))
     for name in watched:
+        if prefix_dirs and not _skipped(name) and _under_watched(name, list(prefix_dirs)):
+            from grokbot_mcp.security.prefixes import literal_path
+            try:
+                literal_path(name)
+                path = root / name
+                if any(is_reparse_point(p) for p in (path, *path.parents)):
+                    raise ValueError("reparse")
+                if path.is_file() and path.stat().st_nlink != 1:
+                    raise ValueError("reparse")
+            except (ValueError, PathRejected) as exc:
+                raise ValueError("reparse") from exc
         hashes[name] = _hash_file(root / name)
     extra = {}
     if not include_ignored:
@@ -130,6 +150,18 @@ def capture_snapshot(
         "file_hashes": hashes,
         **extra,
     }
+
+
+def watched_paths(workspace, document: dict | None = None) -> list[str]:
+    watched = list(workspace.allowed_files) + list(workspace.forbidden_files)
+    if workspace.allowed_prefixes and document:
+        watched = list(dict.fromkeys([*watched, *document.get("allowed_files", [])]))
+    return watched
+
+
+def prefix_snapshot_options(workspace) -> dict:
+    return ({"prefix_dirs": tuple(p.prefix for p in workspace.allowed_prefixes)}
+            if workspace.allowed_prefixes else {})
 
 
 def write_snapshot(directory: Path, execution_id: str, snapshot: dict[str, object]) -> str:

@@ -142,7 +142,8 @@ def workspace_checks(registry: Path, workspace_id: str) -> tuple[object, list[st
     if error:
         codes.append(error)
     try:
-        resolve_exact_files(workspace.root, list(workspace.allowed_files), workspace.forbidden_files)
+        if workspace.allowed_files or not workspace.allowed_prefixes:
+            resolve_exact_files(workspace.root, list(workspace.allowed_files), workspace.forbidden_files)
         resolve_exact_files(workspace.root, [workspace.protected_file], (".git", ".bridge"))
     except TargetRejected as exc:
         codes.append(exc.code)

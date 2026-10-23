@@ -34,6 +34,10 @@ _add("archive_cross_volume_unsupported", "The archive and workspace are on diffe
 _add("allowed_globs_disabled allowed_glob_invalid allowed_glob_unsafe_file allowed_glob_limit_exceeded allowed_glob_empty",
      "Restricted expansion was refused. / 受限目录展开已拒绝。",
      "Review allow_globs, glob_max_files and the explicit registry allow-list. / 核查 allow_globs、glob_max_files 与登记白名单。")
+_add("create_file_outside_policy", "The prospective file is outside the registered prefix policy. / 新建文件不符合登记前缀策略。",
+     "Review the exact task files, allowed_prefixes, extensions and protected paths. / 核查精确任务清单、前缀、扩展名及保护路径。")
+_add("routine_prefix_policy_mismatch", "The local Routine prefix policy or fingerprint is stale. / 本地 Routine 前缀集合或指纹不一致。",
+     "Review the local packet and registration; never modify frozen task evidence or resend. / 核对本地包与登记，不改冻结任务证据、不重发。")
 
 
 _add("test_command_scope_mismatch", "Registered test applicability does not match all allowed files. / 登记测试命令不适用于本次文件范围。",
@@ -322,7 +326,8 @@ def _collect(registry: Path, workspace_id: str, *, purpose="setup", export=False
             )
             problem = workspace_git_rejection(workspace.root) or git_error(git_report, workspace.git_gate)
         try:
-            resolve_exact_files(workspace.root, list(workspace.allowed_files), workspace.forbidden_files)
+            if workspace.allowed_files or not workspace.allowed_prefixes:
+                resolve_exact_files(workspace.root, list(workspace.allowed_files), workspace.forbidden_files)
             resolve_exact_files(workspace.root, [workspace.protected_file], (".git", ".bridge"))
         except TargetRejected as exc:
             problem = exc.code
