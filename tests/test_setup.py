@@ -5,7 +5,8 @@ import io
 import json
 import os
 from pathlib import Path
-import tempfile
+
+from tests.support import temporary_directory
 import unittest
 from unittest.mock import patch
 
@@ -18,7 +19,7 @@ from tests.support import make_workspace, WORKSPACE_ID
 
 class SetupTest(unittest.TestCase):
     def setUp(self):
-        self.temp = tempfile.TemporaryDirectory()
+        self.temp = temporary_directory()
         self.addCleanup(self.temp.cleanup)
         self.environment = patch.dict(os.environ)
         self.environment.start()

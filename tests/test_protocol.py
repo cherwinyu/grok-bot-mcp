@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import json
 import os
-import tempfile
 import threading
 import unittest
 from unittest.mock import Mock, patch
 from pathlib import Path
+
+from tests.support import temporary_directory
 
 from grokbot_mcp import facade
 from grokbot_mcp.credentials.blob import pack_blob, unpack_blob
@@ -20,7 +21,8 @@ from tests.support import EXECUTE, VALIDATE, WORKSPACE_ID, make_workspace, write
 
 class ProtocolTest(unittest.TestCase):
     def setUp(self) -> None:
-        self._tmp = tempfile.TemporaryDirectory()
+        self._tmp = temporary_directory()
+        self.addCleanup(self._tmp.cleanup)
         self.root = make_workspace(Path(self._tmp.name))
 
     def tearDown(self) -> None:

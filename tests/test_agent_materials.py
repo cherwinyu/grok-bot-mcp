@@ -2,9 +2,10 @@ from __future__ import annotations
 import io
 import json
 import os
-import tempfile
 import unittest
 from pathlib import Path
+
+from tests.support import temporary_directory
 from contextlib import redirect_stdout
 from importlib.resources import files
 from grokbot_mcp import agent_cli, setup_wizard, result_examples
@@ -15,7 +16,7 @@ from tests.support import WORKSPACE_ID
 
 class AgentEntryTest(unittest.TestCase):
     def setUp(self):
-        self.temp = tempfile.TemporaryDirectory()
+        self.temp = temporary_directory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name) / "项目 agent 空格"
 
@@ -121,6 +122,11 @@ class MaterialConsistencyTest(DeploymentCase):
                 self.assertNotIn("C:\\ExampleWorkspace", text)
                 self.assertNotIn("C:\\ExamplePython", text)
                 self.assertIn("claim-evidence-v2", text)
+                from grokbot_mcp.registry import load_registry, policy_fingerprint
+                from grokbot_mcp.routine import claim_command
+                fingerprint = policy_fingerprint(load_registry(self.registry)[WORKSPACE_ID])
+                self.assertEqual(text.count(claim_command(WORKSPACE_ID, fingerprint)), 2)
+                self.assertNotIn("<policy_fingerprint from this paste packet>", text)
                 if mode != "create":
                     self.assertIn("claim_dynamic.py", text)
 

@@ -10,7 +10,7 @@
       "protected_file": "src/do_not_touch.py",
       "test_commands": [
         {"id": "none", "task_types": ["read_only"], "timeout_cap": 180, "default_timeout": 180},
-        {"id": "python_unittest", "task_types": ["code_change"], "timeout_cap": 600, "default_timeout": 600}
+        {"id": "python_unittest", "task_types": ["code_change"], "timeout_cap": 3600, "default_timeout": 3600}
       ],
       "validate_credential_target": "grokbot-mcp/example-workspace/validate",
       "execute_credential_target": "grokbot-mcp/example-workspace/execute",

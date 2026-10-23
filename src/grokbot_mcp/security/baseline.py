@@ -109,13 +109,16 @@ def capture_snapshot(
         ignored = [name for name in ignored if _under_watched(name, watched)]
     hashes: dict[str, str | None] = {}
     if prefix_dirs:
+        from grokbot_mcp.security.prefixes import prefix_excluded
         # Index + untracked candidates only. Never walk ignored build/cache trees.
         listing = _run(root, ["ls-files", "--cached", "--others", "--exclude-standard", "-z"], runner)
         if listing.returncode != 0:
             raise ValueError("git_status_failed")
         names = [normalize_policy_path(n) for n in (listing.stdout or "").split("\0") if n]
+        # Keep explicit watches and their descendants, including forbidden directories.
         watched = list(dict.fromkeys([*watched, *(n for n in names if _under_watched(n, list(prefix_dirs))
-                                                  and not _skipped(n))]))
+                                                  and not _skipped(n)
+                                                  and (not prefix_excluded(n) or _under_watched(n, watched)))]))
     for name in watched:
         if prefix_dirs and not _skipped(name) and _under_watched(name, list(prefix_dirs)):
             from grokbot_mcp.security.prefixes import literal_path

@@ -7,9 +7,10 @@ from __future__ import annotations
 
 import json
 import os
-import tempfile
 import unittest
 from pathlib import Path
+
+from tests.support import temporary_directory
 from unittest.mock import patch
 
 from grokbot_mcp import facade, safety
@@ -63,7 +64,7 @@ class IndependentSecurityContractTest(unittest.TestCase):
             validate_url("https://2130706433/fixture")
 
     def test_writes_disabled_and_path_outside_policy(self) -> None:
-        with tempfile.TemporaryDirectory() as name:
+        with temporary_directory() as name:
             make_workspace(Path(name), writes=False)
             denied = facade.prepare_task(
                 WORKSPACE_ID, "code_change", "Add a label helper.",
@@ -71,7 +72,7 @@ class IndependentSecurityContractTest(unittest.TestCase):
             )
             self.assertEqual(denied["error"], "workspace_writes_disabled")
             self.assertFalse(denied["webhook_sent"])
-        with tempfile.TemporaryDirectory() as name:
+        with temporary_directory() as name:
             make_workspace(Path(name), writes=True)
             denied = facade.prepare_task(
                 WORKSPACE_ID, "code_change", "Add a label helper.",
@@ -87,7 +88,7 @@ class IndependentSecurityContractTest(unittest.TestCase):
             self.assertFalse(denied.get("webhook_sent"))
 
     def test_registered_head_mismatch_blocks_prepare(self) -> None:
-        with tempfile.TemporaryDirectory() as name:
+        with temporary_directory() as name:
             make_workspace(Path(name))
             registry = Path(os.environ["GROKBOT_MCP_REGISTRY"])
             data = json.loads(registry.read_text(encoding="utf-8"))
@@ -101,7 +102,7 @@ class IndependentSecurityContractTest(unittest.TestCase):
             self.assertFalse(denied["webhook_sent"])
 
     def test_unknown_submission_cannot_be_resent_or_claimed(self) -> None:
-        with tempfile.TemporaryDirectory() as name:
+        with temporary_directory() as name:
             root = make_workspace(Path(name))
             switch = Path(os.environ["GROKBOT_MCP_REGISTRY"]).parent / "execution_switch.json"
             switch.write_text('{"enabled": true}\n', encoding="utf-8")
@@ -134,7 +135,7 @@ class IndependentSecurityContractTest(unittest.TestCase):
             self.assertFalse(facade.claim_for(WORKSPACE_ID, execution["execution_id"])["ok"])
 
     def test_second_claim_and_replaced_result_stay_frozen(self) -> None:
-        with tempfile.TemporaryDirectory() as name:
+        with temporary_directory() as name:
             root = make_workspace(Path(name))
             switch = Path(os.environ["GROKBOT_MCP_REGISTRY"]).parent / "execution_switch.json"
             switch.write_text('{"enabled": true}\n', encoding="utf-8")
@@ -175,7 +176,7 @@ class IndependentSecurityContractTest(unittest.TestCase):
             self.assertTrue(frozen["reported_success"])
 
     def test_wrong_machine_on_validation_proof_is_identity_mismatch(self) -> None:
-        with tempfile.TemporaryDirectory() as name:
+        with temporary_directory() as name:
             root = make_workspace(Path(name))
             switch = Path(os.environ["GROKBOT_MCP_REGISTRY"]).parent / "execution_switch.json"
             switch.write_text('{"enabled": true}\n', encoding="utf-8")
@@ -194,7 +195,7 @@ class IndependentSecurityContractTest(unittest.TestCase):
             self.assertNotEqual(status["status"], "succeeded")
 
     def test_credential_presence_does_not_validate_the_secret(self) -> None:
-        with tempfile.TemporaryDirectory() as name:
+        with temporary_directory() as name:
             make_workspace(Path(name))
             registry = Path(os.environ["GROKBOT_MCP_REGISTRY"])
             switch = registry.parent / "execution_switch.json"
@@ -207,7 +208,7 @@ class IndependentSecurityContractTest(unittest.TestCase):
             self.assertNotIn("validate-example", json.dumps(result))
 
     def test_canary_refuses_when_declared_machine_changes(self) -> None:
-        with tempfile.TemporaryDirectory() as name:
+        with temporary_directory() as name:
             folder = Path(name) / "FICTIONAL-canary"
             with patch.dict(os.environ, {"COMPUTERNAME": "FICTIONAL-HOST-A"}):
                 reviewed = plan_canary(folder)

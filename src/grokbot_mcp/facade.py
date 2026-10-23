@@ -135,6 +135,8 @@ def preflight(workspace_id: str) -> dict[str, object]:
     except TargetRejected as exc:
         local_error = exc.code
     local_ready = local_error is None
+    from grokbot_mcp.registry_check import check_workspace
+    test_command_check = check_workspace(workspace)["summary"]
     bindings = {phase: routine_readiness(workspace, phase) for phase in ("validate", "execute")}
     blocking = []
     if not local_ready:
@@ -177,6 +179,7 @@ def preflight(workspace_id: str) -> dict[str, object]:
         "qa_accepted": False,
         "ready": ready,
         "local_ready": local_ready,
+        "test_command_check": test_command_check,
         "binding_confirmed": confirmed,
         "remote_binding_verified": False,
         "submit_permitted": ready,
@@ -360,8 +363,18 @@ def get_status(workspace_id: str, task_id: str = "", execution_id: str = "", *,
 
 
 @guarded
-def claim_for(workspace_id: str, execution_id: str) -> dict[str, object]:
+def claim_for(workspace_id: str, execution_id: str, *, expected_fingerprint: str | None = None) -> dict[str, object]:
+    if expected_fingerprint is not None:
+        import re
+        if not isinstance(expected_fingerprint, str) or re.fullmatch(r"[0-9a-f]{64}", expected_fingerprint) is None:
+            return {"ok": False, "error": "invalid_expected_fingerprint"}
     workspace, error, siblings = _workspace(workspace_id)
     if error is not None or workspace is None:
         return error or _closed("unknown_workspace", workspace_id)
+    if expected_fingerprint is not None:
+        from grokbot_mcp.registry import policy_fingerprint
+        current = policy_fingerprint(workspace)
+        if expected_fingerprint != current:
+            return {"ok": False, "error": "routine_binding_mismatch",
+                    "expected_fingerprint": expected_fingerprint, "policy_fingerprint": current}
     return claim_execution(workspace, execution_id, siblings)

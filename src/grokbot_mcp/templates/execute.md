@@ -18,7 +18,7 @@ The Routine receives this trigger in the cloud. The registered paths and interpr
 2. Claim it with the installed bridge. Example:
 
 ```powershell
-C:\ExamplePython\python.exe -m grokbot_mcp.claim_cli --workspace example-workspace <execution_id>
+C:\ExamplePython\python.exe -m grokbot_mcp.claim_cli --workspace example-workspace --expect-fingerprint <policy_fingerprint from this paste packet> <execution_id>
 ```
 
 Replace `C:\ExamplePython\python.exe` and `example-workspace` with your install and registry id.
@@ -43,6 +43,8 @@ Replace `C:\ExamplePython\python.exe` and `example-workspace` with your install 
    - Counts must be real non-negative integers, never booleans or strings; exit status must be an integer.
    - Optional `tests.unit`, `tests.case_count` and `tests.assertion_count` distinguish cases from assertions.
    - Before-test code failure: `status: failed`, `tests.command_id`, `tests.not_run: true`; omit unmeasured counts and exit code.
+
+The execute claim command uses `--expect-fingerprint` from this Routine paste packet. Do not invent or rewrite the fingerprint. If claim returns `routine_binding_mismatch`, stop, do not edit files, and notify the administrator to paste an updated Routine. Validation does not claim an execution.
 
 ## Intermediate results
 

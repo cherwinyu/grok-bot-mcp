@@ -2,9 +2,10 @@
 from __future__ import annotations
 
 import json
-import tempfile
 import unittest
 from pathlib import Path
+
+from tests.support import temporary_directory
 
 from grokbot_mcp import facade
 from grokbot_mcp.security.baseline import capture_snapshot, execution_delta, same_snapshot
@@ -14,7 +15,7 @@ from tests.support import WORKSPACE_ID, git, make_advisory_workspace, make_works
 
 class AdvisorySnapshotSizeTest(unittest.TestCase):
     def setUp(self) -> None:
-        self.temp = tempfile.TemporaryDirectory()
+        self.temp = temporary_directory()
         self.addCleanup(self.temp.cleanup)
         self.base = Path(self.temp.name)
         self.addCleanup(facade.install_transport, None)

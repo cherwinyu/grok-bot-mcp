@@ -35,6 +35,8 @@ The Routine receives this trigger in the cloud. The registered paths and interpr
    - `machine`: the machine name in your registry `expected_machine`
    - `error`: null when successful
 
+The execute claim command uses `--expect-fingerprint` from this Routine paste packet. Do not invent or rewrite the fingerprint. If claim returns `routine_binding_mismatch`, stop, do not edit files, and notify the administrator to paste an updated Routine. Validation does not claim an execution.
+
 ## Intermediate results
 
 A writer may report `pending` or `running` with the same complete identity fields

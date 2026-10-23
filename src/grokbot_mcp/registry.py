@@ -14,6 +14,8 @@ from grokbot_mcp.strict_json import check_size, LedgerTooLarge
 from grokbot_mcp.security.paths import PathRejected
 from grokbot_mcp.security.prefixes import AllowedPrefix, parse_prefixes, prefix_json
 
+MAX_TIMEOUT_SECONDS = 3600
+
 _SHA = re.compile(r"^[0-9a-f]{40}$")
 _ID = re.compile(r"^[a-z0-9][a-z0-9-]{1,63}$")
 
@@ -277,7 +279,7 @@ def _commands(value: object, *, root: Path | None = None,
             raise RegistryError("registry_invalid")
         if isinstance(cap, bool) or isinstance(default, bool) or not isinstance(cap, int) or not isinstance(default, int):
             raise RegistryError("registry_invalid")
-        if cap < 1 or default < 1 or default > cap or cap > 600:
+        if cap < 1 or default < 1 or default > cap or cap > MAX_TIMEOUT_SECONDS:
             raise RegistryError("registry_invalid")
         from grokbot_mcp.test_commands import validate_options
         try:

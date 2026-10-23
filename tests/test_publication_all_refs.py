@@ -6,8 +6,9 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+
+from tests.support import temporary_directory
 import subprocess
-import tempfile
 import unittest
 
 from scripts.audit_publication import AuditError, inspect_repository
@@ -15,7 +16,7 @@ from scripts.audit_publication import AuditError, inspect_repository
 
 class GitAllRefsPrivacyTest(unittest.TestCase):
     def setUp(self):
-        self.scratch = tempfile.TemporaryDirectory()
+        self.scratch = temporary_directory()
         self.addCleanup(self.scratch.cleanup)
         self.repo = Path(self.scratch.name)
         self.git("init", "--initial-branch=main", "--template=")

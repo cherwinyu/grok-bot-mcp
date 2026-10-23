@@ -8,12 +8,13 @@ from pathlib import Path
 from grokbot_mcp.local_safety import LocalError, safe_path, read_document
 from grokbot_mcp.materials import render_routine
 from grokbot_mcp.registry import load_registry, policy_fingerprint, routine_profile
-from grokbot_mcp.routine import routine_readiness, MODES
+from grokbot_mcp.routine import routine_readiness, MODES, CLAIM_GUIDANCE
 from grokbot_mcp.setup_environment import interpreter
 from grokbot_mcp.strict_json import decode, MAX_BYTES
 from grokbot_mcp.security.paths import is_uuid
 
 SCOPE = "Cannot verify remote Routine text; only local packets and registration. / 无法验证远端 Routine 文本，只能验证本地包与登记值。"
+ADVISORIES = {"routine_claim_fingerprint_missing"}
 
 
 def packets(registry: Path, workspace) -> list[tuple[Path, str]]:
@@ -31,7 +32,19 @@ def packets(registry: Path, workspace) -> list[tuple[Path, str]]:
 
 def inspect_text(text: str, workspace, registry: Path, python: Path, kind: str) -> list[str]:
     """Compare data and rendered templates; never execute Markdown instructions."""
+    text = text.replace("\r\n", "\n")
     errors = []
+    fingerprint = policy_fingerprint(workspace)
+    if re.search(r"(?<![0-9a-f])" + fingerprint + r"(?![0-9a-f])", text) is None:
+        errors.append("routine_policy_fingerprint_missing")
+    commands = re.findall(r"(?m)^[^\r\n]* -m grokbot_mcp\.claim_cli\b[^\r\n]*$", text)
+    if not commands or any("--expect-fingerprint" not in command for command in commands):
+        errors.append("routine_claim_fingerprint_missing")
+    for command in commands:
+        if "--expect-fingerprint" in command:
+            values = re.findall(r"--expect-fingerprint\s+(\S+)", command)
+            if values != [fingerprint]:
+                errors.append("routine_claim_fingerprint_mismatch")
     if re.search(r"<ADMIN_[^>\r\n]*>|\{\{[^}\r\n]+\}\}|<(?:WORKSPACE|REGISTRY|PYTHON|POLICY|TEST_COMMAND)[A-Z_]*>", text, re.I):
         errors.append("routine_placeholders_remaining")
     for value in re.findall(r"(?m)^& '((?:[^']|'')*)' -I -X utf8 -m grokbot_mcp\.", text):
@@ -98,8 +111,13 @@ def inspect_text(text: str, workspace, registry: Path, python: Path, kind: str) 
     else:
         for phase in ("validate", "execute"):
             expected_text = render_routine(phase, workspace_root=workspace.root,
-                workspace_id=workspace.workspace_id, registry=registry, python=python, mode=mode, test_options=expected)
-            if expected_text.strip() not in text:
+                workspace_id=workspace.workspace_id, registry=registry, python=python, mode=mode,
+                test_options=expected, expected_fingerprint=fingerprint)
+            # Accept exactly the former template too. Do not normalize away any
+            # unrelated policy, command, or binding differences in the packet.
+            old_command = expected_text.replace(" --expect-fingerprint " + fingerprint, "")
+            legacy = old_command.replace(CLAIM_GUIDANCE + "\n\n", "")
+            if not any(candidate.strip() in text for candidate in (expected_text, old_command, legacy)):
                 errors.append("routine_template_mismatch")
     return sorted(set(errors))
 
@@ -109,7 +127,7 @@ def check(registry: Path, workspace_id: str) -> dict:
     workspace = load_registry(registry).get(workspace_id)
     if workspace is None:
         raise LocalError("unknown_workspace")
-    issues, phases = [], {}
+    issues, warnings, phases = [], [], {}
     interpreters = set()
     for phase in ("validate", "execute"):
         state = routine_readiness(workspace, phase, registry)
@@ -140,11 +158,14 @@ def check(registry: Path, workspace_id: str) -> dict:
             codes = inspect_text(raw.decode("utf-8"), workspace, registry, python, kind)
         except UnicodeError:
             codes = ["routine_packet_invalid"]
-        issues.extend(codes)
-        checked.append({"kind": kind, "ok": not codes, "issues": codes})
+        blocking = [code for code in codes if code not in ADVISORIES]
+        advisory = [code for code in codes if code in ADVISORIES]
+        issues.extend(blocking)
+        warnings.extend(advisory)
+        checked.append({"kind": kind, "ok": not blocking, "issues": blocking, "warnings": advisory})
     if not checked:
         issues.append("routine_packet_missing")
     return {"ok": not issues, "scope": SCOPE, "remote_binding_verified": False,
             "policy_fingerprint": policy_fingerprint(workspace), "phases": phases,
-            "packets": checked, "issues": sorted(set(issues)), "webhook_sent": False,
+            "packets": checked, "issues": sorted(set(issues)), "warnings": sorted(set(warnings)), "webhook_sent": False,
             "credential_values_read": False, "send_authorized": False}

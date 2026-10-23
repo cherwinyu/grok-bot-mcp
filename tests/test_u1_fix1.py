@@ -3,8 +3,9 @@ from contextlib import contextmanager
 import io
 import json
 from pathlib import Path
+
+from tests.support import temporary_directory
 import subprocess
-import tempfile
 import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
@@ -189,11 +190,11 @@ class NativeRegistryRegressionTest(unittest.TestCase):
         self.assertEqual(list(tmp_path.iterdir()), [path])
 
     def test_registry_roundtrip_disk_at_limit(self):
-        with tempfile.TemporaryDirectory() as name:
+        with temporary_directory() as name:
             self.check_registry_roundtrip_disk_at_limit(Path(name), 0)
 
     def test_registry_roundtrip_disk_over_limit(self):
-        with tempfile.TemporaryDirectory() as name:
+        with temporary_directory() as name:
             self.check_registry_roundtrip_disk_at_limit(Path(name), 1)
 
 

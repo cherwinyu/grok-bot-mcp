@@ -4,9 +4,10 @@ import csv
 import io
 import json
 from pathlib import Path
+
+from tests.support import temporary_directory
 import subprocess
 import sys
-import tempfile
 import unittest
 import warnings
 import zipfile
@@ -58,7 +59,7 @@ def sample_delivery(base):
 
 class DeliveryIntegrityTest(unittest.TestCase):
     def test_complete_delivery_checks_tree_commit_record_and_not_qa(self):
-        with tempfile.TemporaryDirectory() as tmp:
+        with temporary_directory() as tmp:
             path, _ = sample_delivery(Path(tmp))
             result = v.verify(path, v.sha(path.read_bytes()))
             self.assertTrue(result['integrity_verified'])
@@ -67,7 +68,7 @@ class DeliveryIntegrityTest(unittest.TestCase):
             self.assertFalse(result['remote_routine_verified'])
 
     def test_wrong_external_hash_rejected_even_with_optimized_python(self):
-        with tempfile.TemporaryDirectory() as tmp:
+        with temporary_directory() as tmp:
             path, _ = sample_delivery(Path(tmp))
             proc = subprocess.run([sys.executable, '-O', str(Path(v.__file__)), '--bundle', str(path), '--sha256', '0'*64], capture_output=True, text=True, encoding="utf-8", errors="replace")
             self.assertEqual(proc.returncode, 1)
@@ -78,7 +79,7 @@ class DeliveryIntegrityTest(unittest.TestCase):
             v.wheel_record(sample_wheel(extra=True))
 
     def test_source_tree_matches_real_git_tree(self):
-        with tempfile.TemporaryDirectory() as tmp:
+        with temporary_directory() as tmp:
             root = Path(tmp)
             subprocess.run(['git', 'init', '-q', str(root)], check=True)
             (root/'a').write_bytes(b'a')
@@ -92,7 +93,7 @@ class DeliveryIntegrityTest(unittest.TestCase):
             self.assertEqual(v.source_tree(blobs, {n:'100644' for n in blobs}), expected)
 
     def test_provenance_tree_mismatch_rejected_after_manifest_is_rebuilt(self):
-        with tempfile.TemporaryDirectory() as tmp:
+        with temporary_directory() as tmp:
             path, files = sample_delivery(Path(tmp))
             obj = json.loads(files['provenance.json'])
             obj['source_tree'] = '0'*40

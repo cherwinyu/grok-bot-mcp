@@ -6,10 +6,11 @@ import asyncio
 import io
 import json
 import os
-import tempfile
 import unittest
 from dataclasses import replace
 from pathlib import Path
+
+from tests.support import temporary_directory
 from unittest.mock import Mock, patch
 
 from grokbot_mcp import facade
@@ -30,7 +31,7 @@ class LocalValidationTest(unittest.TestCase):
         self.env = patch.dict(os.environ)
         self.env.start()
         self.addCleanup(self.env.stop)
-        self.temp = tempfile.TemporaryDirectory()
+        self.temp = temporary_directory()
         self.addCleanup(self.temp.cleanup)
         self.base = Path(self.temp.name)
         self.root = make_advisory_workspace(self.base)
@@ -304,6 +305,19 @@ class ConfigurationTest(unittest.TestCase):
                     text = render_routine(phase, workspace_root=Path("D:/fictional/workspace"),
                         workspace_id="example-workspace", registry=Path("D:/fictional/registry.json"),
                         python=Path("D:/fictional/python.exe"), mode="reuse", test_options=routine_profile(ws))
+                    from grokbot_mcp.routine import CLAIM_GUIDANCE, claim_command
+                    fingerprint_option = " --expect-fingerprint " + policy_fingerprint(ws)
+                    guidance_block = CLAIM_GUIDANCE + "\n\n"
+                    command_count = 1 if phase == "execute" else 0
+                    self.assertEqual(text.count(fingerprint_option), command_count)
+                    self.assertEqual(text.count(claim_command("example-workspace", policy_fingerprint(ws))),
+                                     command_count)
+                    self.assertEqual(text.count(CLAIM_GUIDANCE), 1)
+                    self.assertEqual(text.count(guidance_block), 1)
+                    # Exclude only the new claim option and guidance; all
+                    # remaining template bytes keep their pinned legacy hashes.
+                    text = text.replace(fingerprint_option, "", command_count)
+                    text = text.replace(guidance_block, "", 1)
                     self.assertEqual(hashlib.sha256(text.encode("utf-8")).hexdigest(), digest)
 
     def test_local_marker_requires_flag_and_exact_fingerprint_legacy_unchanged(self):
