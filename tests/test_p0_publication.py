@@ -5,7 +5,8 @@ import hashlib
 import io
 import json
 from pathlib import Path
-import tempfile
+
+from tests.support import temporary_directory
 import unittest
 import zipfile
 from scripts.audit_publication import Audit, AuditError
@@ -71,7 +72,7 @@ class PublicationScannerTest(unittest.TestCase):
 
 class ReleaseGateTest(unittest.TestCase):
     def setUp(self):
-        self.tmp=tempfile.TemporaryDirectory();self.addCleanup(self.tmp.cleanup)
+        self.tmp=temporary_directory();self.addCleanup(self.tmp.cleanup)
         self.root=Path(self.tmp.name);self.commit='a'*40
     def index(self):
         return {'schema_version':1,'source_commit':self.commit,'evidence':{k:{'status':'NOT_RUN','file':None,'sha256':None} for k in REQUIRED}}

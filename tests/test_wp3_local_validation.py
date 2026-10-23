@@ -6,10 +6,11 @@ import asyncio
 import io
 import json
 import os
-import tempfile
 import unittest
 from dataclasses import replace
 from pathlib import Path
+
+from tests.support import temporary_directory
 from unittest.mock import Mock, patch
 
 from grokbot_mcp import facade
@@ -30,7 +31,7 @@ class LocalValidationTest(unittest.TestCase):
         self.env = patch.dict(os.environ)
         self.env.start()
         self.addCleanup(self.env.stop)
-        self.temp = tempfile.TemporaryDirectory()
+        self.temp = temporary_directory()
         self.addCleanup(self.temp.cleanup)
         self.base = Path(self.temp.name)
         self.root = make_advisory_workspace(self.base)

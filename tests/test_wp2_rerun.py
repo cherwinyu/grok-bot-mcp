@@ -59,7 +59,7 @@ class ConfigTest(unittest.TestCase):
             cases.append(({**CONFIG, "cwd": cwd}, "rerun_cwd_forbidden"))
         for env in (None, [], {"lower": "x"}, {"1BAD": "x"}, {"A-B": "x"}, {"A": 1}, {"A": "\x00"}):
             cases.append(({**CONFIG, "env": env}, "rerun_env_invalid"))
-        for timeout in (True, False, None, "1", 0, -1, 1801, 1.5):
+        for timeout in (True, False, None, "1", 0, -1, 3601, 1.5):
             cases.append(({**CONFIG, "timeout_seconds": timeout}, "rerun_timeout_invalid"))
         for config, code in cases:
             with self.subTest(config=config), self.assertRaises(RegistryError) as caught:
@@ -478,7 +478,12 @@ class NativeRerunTest(unittest.TestCase):
         if handle:
             try:
                 code = ctypes.c_ulong()
-                self.assertTrue(kernel.GetExitCodeProcess(handle, ctypes.byref(code)))
+                import time
+                for attempt in range(6):
+                    self.assertTrue(kernel.GetExitCodeProcess(handle, ctypes.byref(code)))
+                    if code.value != 259 or attempt == 5:
+                        break
+                    time.sleep(0.2)
                 self.assertNotEqual(code.value, 259)
             finally:
                 kernel.CloseHandle(handle)

@@ -40,7 +40,7 @@ _add("local_validation_policy_mismatch",
 
 _add("rerun_invalid rerun_argv_invalid rerun_env_invalid rerun_timeout_invalid",
      "The local rerun configuration is invalid. / 本机复跑配置不合法。",
-     "Review rerun: nonempty argv, uppercase environment keys and integer timeout 1–1800. Shells and embedded placeholders are refused. / 核查非空参数数组、大写环境变量名及 1–1800 秒整数超时；不接受 shell 或嵌入占位符。",
+     "Review rerun: nonempty argv, uppercase environment keys and integer timeout 1–3600. Shells and embedded placeholders are refused. / 核查非空参数数组、大写环境变量名及 1–3600 秒整数超时；不接受 shell 或嵌入占位符。",
      blocks="rerun")
 _add("rerun_cwd_invalid rerun_cwd_forbidden rerun_cwd_reparse rerun_cwd_missing",
      "The rerun working directory is unsafe or unavailable. / 复跑工作目录不安全或不可用。",
@@ -131,6 +131,15 @@ _add("git_head_mismatch baseline_stale", "The current Git baseline differs from 
      "Inspect git status and git log locally and review the frozen baseline. Do not auto-advance HEAD or delete the authorization.", blocks="prepare submit claim")
 _add("unexpected_changes unconfirmed_changes protected_or_forbidden_changed scope_violation workspace_changed_since_verification", "The workspace has changes that require review. / 工作区有待审查或越界改动。",
      "Inspect git status and git diff in the workspace. Review every difference; do not reset files or widen the allow-list to make the check pass.", blocks="prepare submit claim acceptance")
+_add("protected_or_forbidden_changed", "The workspace has protected or forbidden changes that require review. / 工作区有待审查的保护或禁止路径改动。",
+     "Inspect git status and git diff; do not reset files or widen the allow-list. "
+     "If the reported path is a nested repository root containing .git (a gitlink or untracked directory), "
+     "Git can report the whole repository as one change. Have an administrator review excluding that directory "
+     "from the outer repository's changes or managing it separately; keep forbidden protection. "
+     "Ignoring does not hide a tracked gitlink. / 若命中含 .git 的嵌套仓库根（gitlink 或未跟踪目录），"
+     "Git 可能将整仓报告为一个变动。请管理员审查将该目录从外层仓库改动中排除或另行管理；"
+     "保留禁区保护，不要重置文件或放宽白名单。忽略规则不能隐藏已跟踪的 gitlink。",
+     blocks="prepare submit claim acceptance")
 _add("credentials_missing credentials_unreadable credential_unreadable", "One phase's credential is absent or unreadable. / 对应阶段凭据缺失或不可读。",
      "Resume setup in an interactive PowerShell. Enter that phase's URL/key only through hidden input; use --replace-credentials only for an intentional replacement.")
 _add("credentials_not_inspected", "Credential Manager was not accessed for this export. / 诊断导出未访问凭据管理器。",

@@ -8,10 +8,11 @@ import os
 import shutil
 import subprocess
 import sys
-import tempfile
 import unittest
 import zipfile
 from pathlib import Path
+
+from tests.support import temporary_directory
 from unittest.mock import patch
 
 from grokbot_mcp import __version__, diagnostics as doctor, setup_environment, setup_wizard as wizard
@@ -32,7 +33,7 @@ class OnboardingTest(unittest.TestCase):
         self.environment = patch.dict(os.environ)
         self.environment.start()
         self.addCleanup(self.environment.stop)
-        self.temp = tempfile.TemporaryDirectory()
+        self.temp = temporary_directory()
         self.addCleanup(self.temp.cleanup)
         self.base = Path(self.temp.name)
         self.root = make_workspace(self.base)
@@ -491,7 +492,7 @@ class EnvironmentTest(unittest.TestCase):
         self.assertNotIn('FictionalPrivatePath72',str(result))
 
     def test_interpreter_does_not_resolve_venv_symlink(self):
-        with tempfile.TemporaryDirectory() as tmp:
+        with temporary_directory() as tmp:
             python=Path(tmp)/'venv python.exe'; python.write_text('fictional', encoding="utf-8")
             with patch.object(setup_environment.sys,'executable',str(python)), \
                  patch.object(Path,'resolve',side_effect=AssertionError('must preserve venv entry')):
@@ -507,7 +508,7 @@ class BootstrapTest(unittest.TestCase):
                               capture_output=True,text=True,env=env,timeout=60, encoding="utf-8", errors="replace")
 
     def test_missing_python_is_actionable(self):
-        with tempfile.TemporaryDirectory() as tmp:
+        with temporary_directory() as tmp:
             result=self.script('-Python',str(Path(tmp)/'missing-python.exe'))
         self.assertEqual(result.returncode,1)
         self.assertIn('python_interpreter_invalid',result.stdout)
@@ -519,7 +520,7 @@ class BootstrapTest(unittest.TestCase):
         self.assertIn('git_missing',result.stdout)
 
     def test_existing_non_venv_directory_is_preserved(self):
-        with tempfile.TemporaryDirectory() as tmp:
+        with temporary_directory() as tmp:
             marker=Path(tmp)/'keep.txt'; marker.write_text('preserve', encoding="utf-8")
             result=self.script('-Python',sys.executable,'-InstallDir',tmp)
             self.assertEqual(result.returncode,1)
@@ -528,7 +529,7 @@ class BootstrapTest(unittest.TestCase):
             self.assertEqual(len(list(Path(tmp).iterdir())),1)
 
     def test_stale_installation_is_not_silently_replaced(self):
-        with tempfile.TemporaryDirectory() as tmp:
+        with temporary_directory() as tmp:
             root=Path(tmp); scripts=root/'scripts'; scripts.mkdir()
             source=Path(__file__).resolve().parents[1]/'scripts/setup.ps1'
             shutil.copyfile(source,scripts/'setup.ps1')
@@ -542,7 +543,7 @@ class BootstrapTest(unittest.TestCase):
             self.assertEqual(importlib.metadata.version('grokbot-mcp-bridge'),__version__)
 
     def test_readonly_bootstrap_preserves_existing_installation(self):
-        with tempfile.TemporaryDirectory() as tmp:
+        with temporary_directory() as tmp:
             result=self.script('-Python',sys.executable,'-InstallDir',sys.prefix,
                                '-Check','-Registry',str(Path(tmp)/'missing.json'),'-Workspace',WORKSPACE_ID)
         self.assertEqual(result.returncode,1)
@@ -550,7 +551,7 @@ class BootstrapTest(unittest.TestCase):
         self.assertIn('registry_missing',result.stdout)
 
     def test_readonly_bootstrap_does_not_create_venv(self):
-        with tempfile.TemporaryDirectory() as tmp:
+        with temporary_directory() as tmp:
             target=Path(tmp)/'new venv'
             result=self.script('-Python',sys.executable,'-InstallDir',str(target),'-Check','-Workspace',WORKSPACE_ID)
             self.assertFalse(target.exists())
@@ -563,7 +564,7 @@ class ConfiguredStdioTest(unittest.TestCase):
         import asyncio
         from mcp import ClientSession
         from mcp.client.stdio import StdioServerParameters, stdio_client
-        with tempfile.TemporaryDirectory() as temporary, patch.dict(os.environ):
+        with temporary_directory() as temporary, patch.dict(os.environ):
             base=Path(temporary); root=make_workspace(base)
             try:
                 registry=base/'registry.json'

@@ -5,7 +5,8 @@ import io
 import json
 import os
 from pathlib import Path
-import tempfile
+
+from tests.support import temporary_directory
 import unittest
 from unittest.mock import patch
 from contextlib import redirect_stdout
@@ -171,7 +172,7 @@ class SafetyWorkflowTest(DeploymentCase):
 
 class CanaryTest(unittest.TestCase):
     def setUp(self):
-        self.tmp=tempfile.TemporaryDirectory();self.addCleanup(self.tmp.cleanup)
+        self.tmp=temporary_directory();self.addCleanup(self.tmp.cleanup)
         self.root=Path(self.tmp.name)/'新建 Canary'
     def test_preview_never_creates_directory(self):
         report=canary.plan(self.root)

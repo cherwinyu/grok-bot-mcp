@@ -17,3 +17,32 @@ Text files and text subprocess output explicitly use UTF-8; subprocess decoding 
 Verification requires native Windows tests, installed-wheel imports outside the source tree, fictional two-installation acceptance, the offline demo and release scans. An environment/permission failure is not a passed gate, and passing these checks does not authorize publication or deployment.
 
 Directory authorization (`allowed_prefixes`) and exact `create_files` use a stricter literal path check before normalization, plus existing-component reparse and hardlink checks. Prefix snapshots use Git index/nonignored candidates, not ignored directory walks. Empty defaults retain legacy policy and result bytes; see [directory authorization](advisory-workspaces.md#directory-authorization).
+
+## PR9 follow-up boundaries
+
+Prefix-derived grants now exclude `.git`, `.bridge`, `.cursor` and `AGENTS.md`
+as whole path segments, using shared policy normalization and case-insensitive
+comparison. This applies to `create_files`, existing files selected through a
+prefix and prefix-derived `allowed_globs` matches. Prefix-only snapshot discovery
+also omits these candidates; explicit watched files and forbidden/protected
+monitoring remain in place. Existing exact registry `allowed_files` exceptions
+retain their previous behavior, including the existing forbidden checks. Registry
+parsing and policy fingerprint inputs are unchanged. The earlier advice to configure
+`.cursor` and `AGENTS.md` exclusions remains useful for exact-file policies and
+monitoring; these names no longer require caller exclusions for derived grants.
+
+Hardlink error codes intentionally remain distinct. Prefix snapshot capture
+reports `reparse` for an existing file with multiple links, as it does for linked
+or reparse components. Prospective `create_files` checks and exact existing-file
+resolution report `target_hardlink_rejected` for a hardlinked leaf. Glob expansion
+wraps unsafe-file checks as `allowed_glob_unsafe_file`. All refuse the operation;
+the codes do not authorize repair of frozen evidence or resend.
+
+`protected_or_forbidden_changed` can name a nested repository root containing
+`.git`: the outer Git status may report an untracked repository directory or a
+changed tracked gitlink as a single entry. The rejection is preserved. Its local
+diagnostic gives conditional guidance, not an automatic classification of the
+filesystem: an administrator should review excluding the nested directory from
+the outer repository's changes or managing it separately, while retaining forbidden
+protection. Ignore rules do not hide tracked gitlinks, and watched ignored paths
+can still refuse. Do not remove forbidden policy merely to pass this check.
