@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from grokbot_mcp.tool_errors import guarded
+from grokbot_mcp.diagnostics import protected_change_hint
 
 from grokbot_mcp.identity import runtime_identity, runtime_drift
 from grokbot_mcp.execution_profile import report as environment_report
@@ -186,6 +187,7 @@ def preflight(workspace_id: str) -> dict[str, object]:
         "phases": {phase: {**entry, "binding": public_binding(workspace, entry.get("binding"))}
                    for phase, entry in per_phase.items()},
         "blocking_reasons": sorted({reason for item in per_phase.values() for reason in item["blocking_reasons"]}),
+        **protected_change_hint(local_error, git.get("protected_or_forbidden_changes")),
     }
     if workspace.git_gate == "advisory":
         result["git_gate"] = "advisory"
@@ -238,6 +240,7 @@ def prepare_task(
         result = _closed(problem, workspace_id)
         if git.get("protected_or_forbidden_changes"):
             result["protected_or_forbidden_changes"] = git["protected_or_forbidden_changes"]
+        result.update(protected_change_hint(problem, git.get("protected_or_forbidden_changes")))
         return result
     try:
         result = prepare_manifest(

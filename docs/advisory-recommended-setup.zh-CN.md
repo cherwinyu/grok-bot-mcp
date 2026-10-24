@@ -10,6 +10,23 @@
 
 不适用：需要强隔离的场合。桥不是操作系统沙箱；它无法验证云端 Routine 的文本（`remote_binding_verified` 恒为 `false`），看不到范围外的读取和普通被 gitignore 的写入，`qa_accepted` 恒为 `false`。不熟悉的工作应使用一次性或另行受限的工作区。
 
+## 运行安装与开发目录分离
+
+运行用的可编辑安装应指向固定在已发布提交的独立 worktree，开发放在另一目录，避免 MCP 进程加载开发目录中其他会话未经审查的源码改动。此 worktree 存放的是**桥的包源码**，不是登记的任务工作区（链接的任务 worktree 仍受共享对象库拒绝规则约束）。
+
+PowerShell 示例；所有占位符均需替换为已审查的值。以下描述管理员管理安装的操作，本文不会执行这些操作：
+
+```powershell
+$BridgePython = '<runtime-venv>\Scripts\python.exe'
+$SourceRepo = '<bridge-source-repository>'
+$RuntimeSource = '<dedicated-runtime-worktree>'
+$PublishedCommit = '<published-commit-sha>'
+git -C $SourceRepo worktree add --detach $RuntimeSource $PublishedCommit
+& $BridgePython -m pip install --no-deps -e $RuntimeSource
+```
+
+所需依赖应另行安装；`--no-deps` 只刷新包安装和可编辑安装元数据。升版时先停止 MCP 进程，把该独立运行 worktree 更新到已审查的已发布提交，再用运行解释器执行 `python -m pip install --no-deps -e <路径>`，随后重启 MCP 进程并核对运行身份。开发改动继续保留在另一目录。
+
 ## 推荐组合
 
 | 选项 | 原因 |
@@ -77,6 +94,14 @@ advisory 加 `local_validation` 时不会向 Grok 提交 Validate，因此只会
 3. 仅在另行的明确授权及开关就绪后用 `grok_submit_execution` 提交。
 4. 轮询 `grok_get_status(execution_id=..., wait_seconds=N)`。`N` 为 1..50 的整数；桥以 1、2、4、5、5… 秒只读轮询，遇到终态或完整已验证结果提前返回。应带退避地重复调用，不要紧循环。
 5. 结果为 `test_evidence_missing` 时，调用 `grok_get_status(execution_id=..., rerun_tests=True)`（不能与 `observe_only` 同用）。之后仍需人工审查与独立 QA。
+
+### 轮询预算与兜底复跑窗口
+
+`wait_seconds` 上限为 50 秒，用于保持单次工具调用较短。对应的 MCP 客户端超时限制**未核实**；此上限不能证明客户端存在这样的限制。省略或传零表示不等待。
+
+以五分钟任务、`wait_seconds=50` 为例：每次调用先立即观察，再按 `1、2、4、5、5……` 秒等待，最后一次等待裁剪到剩余预算。忽略观察与调用开销及终态提前返回，`1 + 2 + 4 + 8 × 5 + 3 = 50`：共 12 次等待，在 `0、1、3、7、12、……、47、50` 秒进行 13 次观察。每次新调用都会重新开始退避。因此 `300 / 50 = 6` 次工具调用约覆盖五分钟（只选一个 ID 时约有 `6 × 13 = 78` 次内部观察，含相邻调用边界的观察）。调用间隔与观察开销会改变次数；若结果恰在最后一次观察后到达，还需再调用一次。重复的是只读状态查询，绝不是重新提交。
+
+本机兜底复跑只在**执行完成并结算后、工作区提交（HEAD 前进）之前**有效。HEAD 前进后，冻结证据不再通过当前结算核对，复跑可能返回 `rerun_result_unverified`。应在提交工作区前复跑；保留原结果与账本，不得通过重写证据或重发绕过此窗口。
 
 ## 三层超时（随同超时上限变更发布）
 

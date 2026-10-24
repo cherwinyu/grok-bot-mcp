@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Callable
 
 from grokbot_mcp.credentials.windows import CredentialError
+from grokbot_mcp.diagnostics import protected_change_hint
 from grokbot_mcp.errors.http_errors import diagnosis_for_outcome
 from grokbot_mcp.manifest.store import ManifestError, load_manifest
 from grokbot_mcp.security.prefixes import manifest_scope_valid, resolve_task_files, policy_allows, manifest_workspace, active_prefix_fields
@@ -74,7 +75,8 @@ def _base(**fields: object) -> dict[str, object]:
 def _protected_fields(report: dict[str, object]) -> dict[str, object]:
     git = report.get("git")
     changes = git.get("protected_or_forbidden_changes") if isinstance(git, dict) else None
-    return {"protected_or_forbidden_changes": changes} if changes else {}
+    return {**({"protected_or_forbidden_changes": changes} if changes else {}),
+            **protected_change_hint(report.get("error"), changes)}
 
 
 def _ledger(workspace: Workspace) -> JsonLedger:

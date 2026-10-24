@@ -10,6 +10,23 @@ Fits: several operators share one whole-repository checkout, tasks are small, an
 
 Does not fit: anything that needs strong isolation. The bridge is not an OS sandbox. It cannot verify the text of the cloud Routine (`remote_binding_verified` is always `false`), it cannot see out-of-scope reads or ordinary gitignored writes, and `qa_accepted` is always `false`. Use a disposable or separately restricted workspace for unfamiliar work.
 
+## Separate the runtime installation from development
+
+Point the runtime editable installation at a dedicated worktree pinned to a published commit. Develop in another directory, so the MCP process cannot load another session's unreviewed source edits from the development checkout. This worktree holds the **bridge package source**; it is not a registered task workspace (linked task worktrees remain subject to the shared-object-store refusal).
+
+PowerShell example; replace every placeholder with a reviewed value. These commands describe an administrator-managed installation, not an action performed by this guide:
+
+```powershell
+$BridgePython = '<runtime-venv>\Scripts\python.exe'
+$SourceRepo = '<bridge-source-repository>'
+$RuntimeSource = '<dedicated-runtime-worktree>'
+$PublishedCommit = '<published-commit-sha>'
+git -C $SourceRepo worktree add --detach $RuntimeSource $PublishedCommit
+& $BridgePython -m pip install --no-deps -e $RuntimeSource
+```
+
+Install the required dependencies separately; `--no-deps` only refreshes the package installation and editable metadata. For an upgrade, stop the MCP process, update this dedicated runtime worktree to the reviewed published commit, run `python -m pip install --no-deps -e <path>` using the runtime interpreter again, then restart the MCP process and check its runtime identity. Keep development edits in the other directory.
+
 ## Recommended combination
 
 | Option | Why |
@@ -77,6 +94,14 @@ With advisory plus `local_validation`, no Validate submission to Grok is made, s
 3. Submit with `grok_submit_execution` only under the separate, explicit authorization and switches.
 4. Poll `grok_get_status(execution_id=..., wait_seconds=N)`. `N` is an integer 1..50; the bridge polls read-only at 1, 2, 4, 5, 5… seconds and returns early on a terminal state or a complete validated result. Call it repeatedly with backoff rather than in a tight loop.
 5. If the result is `test_evidence_missing`, call `grok_get_status(execution_id=..., rerun_tests=True)` (not with `observe_only`). Human review and independent QA still follow.
+
+### Polling budget and fallback rerun window
+
+The `wait_seconds` ceiling of 50 seconds keeps a single tool call short. A matching MCP-client timeout limit has **not been verified**; this ceiling is not evidence of such a client limit. Omitted or zero means no waiting.
+
+Estimate for a five-minute task using `wait_seconds=50`: within each call, the bridge observes immediately, then waits `1, 2, 4, 5, 5, ...` seconds, clipping the last wait to the remaining budget. Ignoring probe/call overhead and early terminal results, `1 + 2 + 4 + 8 × 5 + 3 = 50`: 12 sleeps and 13 observations at `0, 1, 3, 7, 12, ..., 47, 50` seconds. Each new call restarts this backoff. Thus `300 / 50 = 6` tool calls cover roughly five minutes (about `6 × 13 = 78` internal observations for one selected ID, including adjacent calls' boundary observations). Time between calls and probe overhead change the count; a result arriving just after the final observation requires another call. Repeat read-only status queries, never submissions.
+
+Run the local fallback only **after execution has finished and settled, before committing the workspace (advancing HEAD)**. Once HEAD advances, frozen evidence no longer passes current settlement checks and the rerun can return `rerun_result_unverified`. Rerun before committing; preserve the original result and ledger, and do not rewrite evidence or resend to bypass this window.
 
 ## Three timeout levels (ships with the timeout-ceiling change)
 
