@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.1.5b5
+
+- `protected_or_forbidden_changed` diagnostics now name up to 10 offending
+  repo-relative paths (sanitized, "... and N more") and note that the changes
+  may come from another session sharing the repository. Blocking decisions,
+  error codes and existing fields are unchanged; the hint does not suggest
+  reverting files or switching to `advisory`.
+- `rerun_result_unverified` guidance states that the bridge fallback rerun is
+  only valid after execution completes and before the workspace is committed.
+- Extend the recommended advisory setup guide (English and Chinese) with the
+  runtime-install versus development-checkout split, `wait_seconds` polling
+  arithmetic and the rerun time window.
+- Add `scripts/grok_run_example.py` and bilingual docs: an example-only client
+  that orchestrates the existing seven MCP tools in one command. It is not a
+  supported interface, adds no MCP tool and never resends an unknown submission.
+- Apart from the version banner in generated Routine material, this update does
+  not change `policy_fingerprint` semantics and does not authorize publication.
+
 ## 0.1.5b4
 
 - Raise the global execution timeout ceiling from 600 to 3600 seconds and the
