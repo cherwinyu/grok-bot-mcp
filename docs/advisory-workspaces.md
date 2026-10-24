@@ -266,7 +266,7 @@ to obtain these instructions; Validate needs no content update for this change.
 No actual Routine is edited by this source update. This template correction does
 not change `policy_fingerprint`: bindings check policy and capabilities, not a
 hash of Routine prose. Default/false bodies keep their bytes under the same
-version banner; upgrading to 0.1.5b3 changes the generated version banner.
+version banner; upgrading to 0.1.5b4 changes the generated version banner.
 
 ## Routine fingerprint at claim
 

@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.1.5b4
+
+- Raise the global execution timeout ceiling from 600 to 3600 seconds and the
+  `rerun.timeout_seconds` ceiling from 1800 to 3600. The setup wizard defaults
+  new code-test commands to `timeout_cap`/`default_timeout` of 3600/3600;
+  per-task `execution_timeout` and per-command `timeout_cap` may still be lower.
+  Existing registrations are not automatically upgraded, and old ledger records
+  without a timeout field retain the 600-second fallback.
+- Add read-only `admin_cli registry-check` and the additive
+  `grok_preflight.test_command_check` field without changing `local_ready`.
+  Clarify the recovery guidance for `installation_mismatch`.
+- Add `claim_cli --expect-fingerprint` and include it in generated Routine text.
+  After upgrading, regenerate and repaste the Routine text; calls that omit the
+  option retain their existing behavior.
+- Exclude governance paths such as `.cursor` and `AGENTS.md` by default when
+  deriving prefix authorizations, and add nested-repository diagnostics.
+  Improve test temporary-directory support and JSON encoding on non-UTF-8
+  consoles. Use the package version as the single source for version readers.
+- Add the recommended advisory setup guide in
+  [English](docs/advisory-recommended-setup.md) and
+  [Chinese](docs/advisory-recommended-setup.zh-CN.md).
+- Apart from the changes described above, this update does not change
+  `policy_fingerprint` semantics and does not authorize publication.
+
 ## 0.1.5b3
 
 - Explicit registered reruns can supplement an otherwise valid execution frozen
