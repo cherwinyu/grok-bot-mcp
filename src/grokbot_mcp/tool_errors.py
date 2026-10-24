@@ -18,8 +18,21 @@ def internal_error(exc: Exception) -> dict:
     kind = type(exc).__name__
     kind = kind if kind.isidentifier() and len(kind) <= 80 else "Exception"
     logging.getLogger(__name__).error("internal_error exception_type=%s", kind)
-    return {"ok": False, "error": "internal_error", "exception_type": kind,
-            "reason": "Local operation failed. Inspect local diagnostics; do not resend."}
+    result = {"ok": False, "error": "internal_error", "exception_type": kind,
+              "reason": "Local operation failed. Inspect local diagnostics; do not resend."}
+    try:
+        # Mixed installed/loaded versions can fail before normal drift reporting.
+        # Even the diagnostic import may fail; preserve the original safe error.
+        from grokbot_mcp.identity import runtime_drift
+        if runtime_drift()["package_changed"]:
+            result["warnings"] = ["process_restart_recommended"]
+            result["next_step"] = (
+                "Restart the MCP client process. Do not resend or retry submissions. / "
+                "重启 MCP 客户端进程；不要重发或重试提交。"
+            )
+    except Exception:
+        pass
+    return result
 
 
 def guarded(function):
