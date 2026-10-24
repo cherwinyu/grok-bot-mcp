@@ -53,7 +53,10 @@ _add("execution_not_terminal", "The execution has no settled terminal decision. 
 _add("result_missing", "The execution result file is absent. / 执行结果文件不存在。",
      "Observe the original execution and preserve its ledger. Never invent a result or resend. / 观察原执行并保留账本，不伪造结果或重发。", blocks="rerun")
 _add("rerun_result_unverified", "Frozen execution evidence did not pass current settlement checks. / 冻结执行证据未通过当前结算校验。",
-     "Review the original result, identity, claim and workspace locally. Do not replace frozen evidence or change QA state. / 本地复核原结果、身份、claim 与工作区；不替换冻结证据或更改 QA 状态。", blocks="rerun")
+     "Review the original result, identity, claim and workspace locally. Do not replace frozen evidence or change QA state. / 本地复核原结果、身份、claim 与工作区；不替换冻结证据或更改 QA 状态。 "
+     "The local fallback rerun is valid only after execution finishes and before committing the workspace (advancing HEAD). "
+     "After that, frozen evidence no longer passes current settlement checks; rerun before committing the workspace. / "
+     "本机兜底复跑只在执行完成后、工作区提交（HEAD 前进）之前有效；之后冻结证据不再通过当前结算核对，应在提交工作区前复跑。", blocks="rerun")
 _add("rerun_start_failed rerun_timeout rerun_tree_cleanup_failed",
      "The local process could not start, timed out, or its tree cleanup failed. / 本机进程启动失败、超时或进程树清理失败。",
      "Review local rerun evidence and the registered executable. A local failure is not permission to resend a Grok task. / 核对本机复跑证据及登记程序；本机失败不允许重发 Grok 任务。", blocks="rerun")
@@ -138,7 +141,9 @@ _add("protected_or_forbidden_changed", "The workspace has protected or forbidden
      "from the outer repository's changes or managing it separately; keep forbidden protection. "
      "Ignoring does not hide a tracked gitlink. / 若命中含 .git 的嵌套仓库根（gitlink 或未跟踪目录），"
      "Git 可能将整仓报告为一个变动。请管理员审查将该目录从外层仓库改动中排除或另行管理；"
-     "保留禁区保护，不要重置文件或放宽白名单。忽略规则不能隐藏已跟踪的 gitlink。",
+     "保留禁区保护，不要重置文件或放宽白名单。忽略规则不能隐藏已跟踪的 gitlink。 "
+     "These changes may come from other sessions in the same repository; have their owner commit or handle them before submitting the task. / "
+     "这些改动可能来自同一仓库的其他会话；由改动所有者提交或处理后再提交任务。",
      blocks="prepare submit claim acceptance")
 _add("credentials_missing credentials_unreadable credential_unreadable", "One phase's credential is absent or unreadable. / 对应阶段凭据缺失或不可读。",
      "Resume setup in an interactive PowerShell. Enter that phase's URL/key only through hidden input; use --replace-credentials only for an intentional replacement.")
@@ -266,8 +271,48 @@ def finding(code: object, phase: str = "workspace", purpose: str = "setup") -> d
     return {**CATALOG[code], "phase": phase if isinstance(phase, str) and phase in PHASES else "workspace", "severity": severity}
 
 
+def _blocking_paths(changes: object, omitted: object = 0) -> dict:
+    """Bound presentation only; never probe paths or alter the original Git field."""
+    from grokbot_mcp.errors.http_errors import MAX_SUMMARY_CHARS
+    from grokbot_mcp.security.paths import normalize_repo_path, PathRejected
+    from grokbot_mcp.security.redact import redact
+
+    if not isinstance(changes, list) or not changes:
+        return {}
+    paths = []
+    for value in changes[:10]:
+        try:
+            if not isinstance(value, str) or not value.isprintable() or ":" in value:
+                raise PathRejected("absolute_path")
+            cleaned = redact(normalize_repo_path(value))
+        except PathRejected:
+            cleaned = "[path withheld]"
+        paths.append(cleaned if len(cleaned) <= MAX_SUMMARY_CHARS else cleaned[:MAX_SUMMARY_CHARS - 1] + "…")
+    remaining = max(0, len(changes) - 10)
+    if type(omitted) is int and 0 <= omitted <= 2**31 - 1:
+        remaining += omitted
+    return {"blocking_paths": paths, "blocking_paths_omitted": remaining}
+
+
+def _protected_next_step(paths: dict) -> str:
+    text = CATALOG["protected_or_forbidden_changed"]["next_step"]
+    if paths:
+        text += " Triggering files / 触发文件: " + json.dumps(paths["blocking_paths"], ensure_ascii=False)
+        remaining = paths["blocking_paths_omitted"]
+        if remaining:
+            text += f" …and {remaining} more / …及另外 {remaining} 个"
+    return text
+
+
+def protected_change_hint(code: object, changes: object = None) -> dict:
+    """Add advice only for this refusal, leaving all gate decisions unchanged."""
+    if code != "protected_or_forbidden_changed":
+        return {}
+    return {"next_step": _protected_next_step(_blocking_paths(changes))}
+
+
 def public_report(report: dict) -> dict:
-    """Rebuild even nested descriptions from trusted constants. Never stringify input."""
+    """Rebuild descriptions from constants and bounded, sanitized relative paths."""
     purpose = report.get("purpose") if report.get("purpose") in ("setup", "submit") else "setup"
     result = {"schema_version": 1, "scope": "local-read-only; not remote verification or QA",
               "workspace": "workspace-1", "purpose": purpose,
@@ -280,8 +325,17 @@ def public_report(report: dict) -> dict:
         value = report.get(key)
         result[key] = value if isinstance(value, str) and re.fullmatch(r"\d+\.\d+\.\d+(?:\.dev\d+)?", value) else "unknown"
     items = report.get("findings")
-    result["findings"] = [finding(item.get("code"), item.get("phase"), purpose)
-                          for item in (items if isinstance(items, list) else []) if isinstance(item, dict)]
+    result["findings"] = []
+    for source in (items if isinstance(items, list) else []):
+        if not isinstance(source, dict):
+            continue
+        item = finding(source.get("code"), source.get("phase"), purpose)
+        if item["code"] == "protected_or_forbidden_changed":
+            paths = _blocking_paths(source.get("blocking_paths", report.get("protected_or_forbidden_changes")),
+                                    source.get("blocking_paths_omitted", 0))
+            item.update(paths)
+            item["next_step"] = _protected_next_step(paths)
+        result["findings"].append(item)
     if any(item["code"] == "routine_timeout_no_result" for item in result["findings"]):
         result["operator_message"] = ROUTINE_TIMEOUT_MESSAGE
     # Keep the legacy CLI summary, but make its scope explicit. No MCP fields change.
