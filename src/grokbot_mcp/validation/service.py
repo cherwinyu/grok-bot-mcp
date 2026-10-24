@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from grokbot_mcp.validation.presentation import public_validation_fields
+from grokbot_mcp.diagnostics import protected_change_hint
 
 from pathlib import Path
 from typing import Callable
@@ -102,6 +103,7 @@ def submit_validation(
             task_id, error=problem, manifest_sha256=digest,
             **({"protected_or_forbidden_changes": git["protected_or_forbidden_changes"]}
                if git.get("protected_or_forbidden_changes") else {}),
+            **protected_change_hint(problem, git.get("protected_or_forbidden_changes")),
         )
     result_rel = ".bridge/results_v2/" + task_id + ".json"
     result_file = workspace.root / ".bridge" / "results_v2" / f"{task_id}.json"
