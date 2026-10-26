@@ -7,6 +7,9 @@ from pathlib import Path
 
 from grokbot_mcp.security.paths import contained, is_reparse_point, normalize_policy_path
 
+STATUS_ARGS = ("status", "--porcelain")
+PROTECTED_STATUS_ARGS = ("status", "--porcelain=v1", "--ignored", "--untracked-files=all")
+
 
 def _run(root: Path, args: list[str], runner=subprocess.run):
     from grokbot_mcp.security.gitread import run_git
@@ -37,14 +40,14 @@ def workspace_git_rejection(root: Path, runner=subprocess.run) -> str | None:
 def git_snapshot(root: Path, allowed: tuple[str, ...], expected_head: str,
                  forbidden: tuple[str, ...] = (), runner=subprocess.run) -> dict[str, object]:
     head = _run(root, ["rev-parse", "HEAD"], runner)
-    status = _run(root, ["status", "--porcelain"], runner)
+    status = _run(root, list(STATUS_ARGS), runner)
     diff = _run(root, ["diff", "--name-only", "HEAD"], runner)
     protected = tuple(
         normalize_policy_path(name) for name in forbidden
         if normalize_policy_path(name, casefold=True) not in {".git", ".bridge"}
     )
     protected_status = (
-        _run(root, ["status", "--porcelain=v1", "--ignored", "--untracked-files=all",
+        _run(root, [*PROTECTED_STATUS_ARGS,
                     "--", *(":(icase,literal)" + name for name in protected)], runner)
         if protected else None
     )

@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import os
 import re
+from collections import Counter
 from pathlib import Path
 
 CATALOG: dict[str, dict] = {}
@@ -142,6 +143,8 @@ _add("protected_or_forbidden_changed", "The workspace has protected or forbidden
      "Ignoring does not hide a tracked gitlink. / 若命中含 .git 的嵌套仓库根（gitlink 或未跟踪目录），"
      "Git 可能将整仓报告为一个变动。请管理员审查将该目录从外层仓库改动中排除或另行管理；"
      "保留禁区保护，不要重置文件或放宽白名单。忽略规则不能隐藏已跟踪的 gitlink。 "
+     "Ignored or untracked content under forbidden directories (such as a virtual environment inside the workspace) may also trigger this check. / "
+     "也可能是 forbidden 目录下的忽略/未跟踪内容（例如工作区内的虚拟环境）。 "
      "These changes may come from other sessions in the same repository; have their owner commit or handle them before submitting the task. / "
      "这些改动可能来自同一仓库的其他会话；由改动所有者提交或处理后再提交任务。",
      blocks="prepare submit claim acceptance")
@@ -311,6 +314,60 @@ def protected_change_hint(code: object, changes: object = None) -> dict:
     return {"next_step": _protected_next_step(_blocking_paths(changes))}
 
 
+def _change_summary(changes: list, *, includes_ignored: bool) -> dict:
+    """Aggregate the full observed list, before bounding sample paths."""
+    from grokbot_mcp.errors.http_errors import MAX_SUMMARY_CHARS
+    from grokbot_mcp.security.paths import PathRejected, decode_git_path, normalize_repo_path
+    from grokbot_mcp.security.redact import redact
+    counts = Counter()
+    for value in changes:
+        try:
+            # Strict status may retain Git quoting and collapsed directory entries.
+            if not isinstance(value, str):
+                continue
+            decoded = decode_git_path(value).replace("\\", "/")
+            if not decoded.isprintable() or ":" in decoded or (value.startswith('"') and decoded == value):
+                continue
+            name = normalize_repo_path(decoded)
+            directory = name.split("/", 1)[0] if "/" in name or decoded.endswith("/") else "(root)"
+            directory = redact(directory)
+            if len(directory) > MAX_SUMMARY_CHARS:
+                directory = directory[:MAX_SUMMARY_CHARS - 1] + "…"
+            counts[directory] += 1
+        except PathRejected:
+            continue
+    return {"includes_ignored": includes_ignored,
+            "top_level_dirs": [{"dir": name, "count": count} for name, count in
+                               sorted(counts.items(), key=lambda pair: (-pair[1], pair[0]))[:10]]}
+
+
+def _public_change_summary(source: dict) -> dict:
+    """Accept only bounded relative segments and measured positive counts."""
+    from grokbot_mcp.errors.http_errors import MAX_SUMMARY_CHARS
+    from grokbot_mcp.security.paths import PathRejected, normalize_repo_path
+    from grokbot_mcp.security.redact import redact
+    if type(source.get("includes_ignored")) is not bool or not isinstance(source.get("top_level_dirs"), list):
+        return {}
+    counts = Counter()
+    for entry in source["top_level_dirs"]:
+        if not isinstance(entry, dict):
+            continue
+        name, count = entry.get("dir"), entry.get("count")
+        if (not isinstance(name, str) or not name.isprintable() or
+                any(char in name for char in "/\\:") or len(name) > MAX_SUMMARY_CHARS or
+                type(count) is not int or count <= 0):
+            continue
+        try:
+            if normalize_repo_path(name) != name:
+                continue
+        except PathRejected:
+            continue
+        counts[redact(name)] += count
+    return {"includes_ignored": source["includes_ignored"],
+            "top_level_dirs": [{"dir": name, "count": count} for name, count in
+                               sorted(counts.items(), key=lambda pair: (-pair[1], pair[0]))[:10]]}
+
+
 def public_report(report: dict) -> dict:
     """Rebuild descriptions from constants and bounded, sanitized relative paths."""
     purpose = report.get("purpose") if report.get("purpose") in ("setup", "submit") else "setup"
@@ -330,6 +387,8 @@ def public_report(report: dict) -> dict:
         if not isinstance(source, dict):
             continue
         item = finding(source.get("code"), source.get("phase"), purpose)
+        if item["code"] in ("unconfirmed_changes", "protected_or_forbidden_changed"):
+            item.update(_public_change_summary(source))
         if item["code"] == "protected_or_forbidden_changed":
             paths = _blocking_paths(source.get("blocking_paths", report.get("protected_or_forbidden_changes")),
                                     source.get("blocking_paths_omitted", 0))
@@ -441,6 +500,12 @@ def _collect(registry: Path, workspace_id: str, *, purpose="setup", export=False
             problem = exc.code
         if problem:
             add(problem)
+            if isinstance(git_report, dict) and problem in ("unconfirmed_changes", "protected_or_forbidden_changed"):
+                from grokbot_mcp.security.gitcheck import STATUS_ARGS, PROTECTED_STATUS_ARGS
+                protected = problem == "protected_or_forbidden_changed"
+                changes = git_report.get("protected_or_forbidden_changes" if protected else "unconfirmed_changes", [])
+                args = PROTECTED_STATUS_ARGS if protected else STATUS_ARGS
+                report["findings"][-1].update(_change_summary(changes, includes_ignored="--ignored" in args))
         report["workspace_ready"] = problem is None
         if workspace.git_gate == "advisory":
             report["git_gate"] = "advisory"
@@ -587,6 +652,11 @@ def render(report: dict) -> str:
     lines.append("NOT VERIFIED: real remote execution / 未验证真实远端执行；qa_accepted=false")
     for item in safe["findings"]:
         lines.append(f"[{item['severity']}:{item['code']}] ({item['phase']}; {item['where']}) {item['reason']}\n  Next / 下一步: {item['next_step']}")
+        if "includes_ignored" in item:
+            ignored = "yes / 是" if item["includes_ignored"] else "no / 否"
+            lines.append(f"  Includes git-ignored files / 统计 Git 忽略文件: {ignored}; "
+                         "Top-level directories (observed entries) / 顶层目录（观测条目数）: "
+                         + json.dumps(item["top_level_dirs"], ensure_ascii=False))
     return "\n".join(lines)
 
 _add("installation_package_unreadable", "Installed package files are unreadable or linked.",
