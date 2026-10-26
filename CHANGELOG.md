@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- The setup wizard now registers new workspaces with `git_gate: "advisory"` by default; `--git-gate strict` selects strict. An explicit strict request on a workspace with uncommitted changes prints an advisory hint and still registers strict. Existing registry entries that omit `git_gate` remain strict.
+- The Routine claim fingerprint is now opt-in for every workspace: registry `routine_claim_fingerprint: true` (wizard `--claim-fingerprint` on first registration) enables it, and a non-boolean value is rejected with `routine_claim_fingerprint_invalid`. While off, generated Routine text has no `--expect-fingerprint`, `routine_check` accepts that, and the local binding still records and compares the policy fingerprint. Only `true` enters the policy fingerprint, so strict workspaces that omit it keep their fingerprints.
+- An advisory workspace's `policy_fingerprint` no longer includes `expected_head` (whether or not the claim fingerprint option is on), so ordinary commits do not invalidate the Routine; strict is unchanged. The fingerprint of an existing advisory binding changes once: regenerate the material, update the Routine and reconfirm the binding.
+- A `registry.json` with a UTF-8 BOM is read directly (including by `registry-prefixes` and the wizard); writes remain BOM-free.
+- `init_credentials` accepts `--stdin` (URL line, then key line) or `--url-env NAME --key-env NAME`, without echoing values. New codes: exit 2 `credential_arguments_invalid`, `credential_input_conflict`, `credential_env_pair_required`, `credential_env_name_invalid`; exit 1 `credential_env_missing`, `credential_env_empty`, `credential_stdin_incomplete`, `credential_input_unavailable`.
+- Readiness diagnostics for `unconfirmed_changes` and `protected_or_forbidden_changed` add `includes_ignored` and `top_level_dirs` to CLI findings, `--json` and `--export`; MCP results are unchanged.
+- The wizard supports a non-interactive first registration (`--yes`, `--root`, `--allow-file`, `--allowed-prefix`, `--prefix-ceiling`, `--protected-file`, `--test-command`, `--test-instruction`, `--local-validation`, `--claim-fingerprint`) and credentials from `--validate-url-env`, `--validate-key-env`, `--execute-url-env`, `--execute-key-env`. `--yes` saves the registration only and does not confirm Routine bindings.
+
 ## 0.1.5
 
 - First non-prerelease version of this experimental line; it is not the

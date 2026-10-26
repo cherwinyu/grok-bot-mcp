@@ -35,6 +35,10 @@ Each finding has a stable `code`, ordinary-language `reason`, affected operation
 
 每条诊断包含稳定错误码、原因、受阻操作、下一步及操作位置；不会用“已绑定”替代“远端验证成功”。`--purpose setup` 将关闭的写许可和总开关视为安全默认状态；`--purpose submit` 将其视为提交阻塞条件。
 
+For `unconfirmed_changes` and `protected_or_forbidden_changed`, the `--check` findings (text, `--json` and `--export`) also carry `includes_ignored` and `top_level_dirs`. `top_level_dirs` lists up to 10 top-level directories with the number of observed Git status entries under each, most entries first; files at the repository root are counted under `(root)`. `includes_ignored` is `true` when the underlying Git status also counted git-ignored files, as the protected/forbidden check does, so a directory such as a virtual environment inside the workspace can account for many entries. These fields appear only in the CLI diagnostics, not in MCP tool results, and do not change any gate or error code.
+
+对 `unconfirmed_changes` 与 `protected_or_forbidden_changed`，`--check` 的诊断（文本、`--json`、`--export`）还会带 `includes_ignored` 和 `top_level_dirs`。`top_level_dirs` 列出最多 10 个顶层目录及其下观测到的 Git 状态条目数，条目多者在前；仓库根目录的文件计入 `(root)`。`includes_ignored` 为 `true` 表示所依据的 Git 状态同时统计了被 Git 忽略的文件（保护/禁止检查即如此），因此工作区内的虚拟环境等目录可能占去大量条目。这些字段只出现在 CLI 诊断中，不出现在 MCP 工具返回里，也不改变任何门或错误码。
+
 | Code or family | What to do / 处理方法 |
 |---|---|
 | `python_interpreter_invalid`, `python_unsupported`, `installation_mismatch` | Use a real Python 3.12 installation and a separate installed venv; preserve the active installation. 使用准确安装解释器，不覆盖现用环境。 |

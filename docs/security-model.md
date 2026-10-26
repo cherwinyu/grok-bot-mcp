@@ -29,7 +29,7 @@
 
 See [path normalization and bounded JSON](hardening.md) / [路径规范化与 JSON 上限](hardening.zh-CN.md) for the advisory comparison rules and safe error codes.
 
-`strict` remains the default and preserves the existing HEAD, dirty-worktree, untracked-file and post-run scope refusals. A workspace may explicitly select `advisory`: the claim freezes the then-current HEAD and existing tracked/untracked change list, while later out-of-scope changes are reported instead of failing solely for scope.
+`strict` preserves the existing HEAD, dirty-worktree, untracked-file and post-run scope refusals; a registry entry that omits `git_gate` is `strict`. The setup wizard registers new workspaces as `advisory` unless `--git-gate strict` is passed. A workspace may select `advisory`: the claim freezes the then-current HEAD and existing tracked/untracked change list, while later out-of-scope changes are reported instead of failing solely for scope.
 
 Advisory checks every registered protected/forbidden path against the current HEAD at admission and claim, then compares the recorded hashes after claim. `.git` is not path-compared, and the bridge's own untracked `.bridge` runtime directory remains excluded. Git command failures, manifest allow-list validation, claim-once, identity, frozen-evidence and no-resend rules remain fail-closed. Advisory cannot attribute concurrent writes to an agent, cannot detect out-of-scope reads, and is not an OS sandbox. The operator must review Git history and diffs.
 
@@ -44,6 +44,8 @@ Exact `allowed_files` exceptions remain independent of the ceiling; all existing
 forbidden/protected checks still apply. An empty active list grants no prefixes.
 
 With a ceiling, the fingerprint covers the ceiling instead of active prefixes.
+
+The Routine claim fingerprint (`--expect-fingerprint`) is off by default and enabled per workspace with `routine_claim_fingerprint: true`; only `true` enters the policy fingerprint. For an advisory workspace the policy fingerprint excludes `expected_head`; strict keeps it. The local binding records and compares the fingerprint whether or not the option is on. See [Routine fingerprint at claim](advisory-workspaces.md#routine-fingerprint-at-claim).
 Changing the ceiling, forbidden or protected policy still requires updated Routine
 text and explicit binding confirmation. Expanding or shrinking active prefixes
 within the ceiling does not require repasting the Routine. Preparation freezes

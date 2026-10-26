@@ -75,7 +75,7 @@ $BridgePython = 'C:\ExampleBridgeBeta\Scripts\python.exe'
 
 ## 可选 advisory Git 门
 
-工作区登记可设置 `"git_gate": "advisory"`；省略该字段时仍是原有的 strict 模式，旧登记文件不会因代码升级而被改写。advisory 模式会记录 claim 时的 HEAD，以及此前已有的已跟踪/未跟踪改动；执行后，超出 `allowed_files` 的新增路径或 Agent 上报的路径会记入 `out_of_scope_changes`，但不会仅因此把结果判为失败。准入和 claim 时，会对照当前 HEAD 检查已登记的保护/禁止路径；claim 之后再比对其已记录的哈希。`.git` 不做路径比对，Bridge 自身未跟踪的 `.bridge` 运行目录仍被排除。Git 命令失败、manifest 范围、claim-once、身份校验、冻结证据和不重发检查仍保持 fail-closed。
+工作区登记可设置 `"git_gate": "advisory"`；省略该字段的已有登记仍是 strict 模式，旧登记文件不会因代码升级而被改写；向导新登记的工作区默认为 `advisory`（用 `--git-gate strict` 改回）。advisory 模式会记录 claim 时的 HEAD，以及此前已有的已跟踪/未跟踪改动；执行后，超出 `allowed_files` 的新增路径或 Agent 上报的路径会记入 `out_of_scope_changes`，但不会仅因此把结果判为失败。准入和 claim 时，会对照当前 HEAD 检查已登记的保护/禁止路径；claim 之后再比对其已记录的哈希。`.git` 不做路径比对，Bridge 自身未跟踪的 `.bridge` 运行目录仍被排除。Git 命令失败、manifest 范围、claim-once、身份校验、冻结证据和不重发检查仍保持 fail-closed。
 
 这种取舍使多个 Agent 可以共用一个 checkout，但 Bridge 无法判断并发改动属于哪个写入方，使用方必须自行复核 Git 历史与 diff。越出声明范围的读取无法被检测；advisory 模式也不是 OS 沙箱。
 

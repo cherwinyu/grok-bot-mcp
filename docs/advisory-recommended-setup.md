@@ -37,6 +37,7 @@ Install the required dependencies separately; `--no-deps` only refreshes the pac
 | `allowed_files: []` | Valid when prefixes or a ceiling are present; new files inside a prefix need no re-registration. |
 | `forbidden_files` / `protected_file` | Keep agent rules, private configuration, `.git` and `.bridge` out of reach; forbidden and protected paths always win. |
 | `local_validation: true` | The bridge performs Validate locally (advisory only); it is part of the fingerprint. |
+| `routine_claim_fingerprint: true` | Optional (off by default; wizard `--claim-fingerprint`): the Execute claim command carries `--expect-fingerprint`; it is part of the fingerprint only when true. |
 | `rerun` on the test command | The bridge reruns the registered test with `shell=False` and writes receipts; not part of the fingerprint. |
 | `require_test_output: true` | A result without measured test output becomes `test_evidence_missing` instead of success. |
 
@@ -131,6 +132,8 @@ Consequences:
 | `forbidden_files` / `protected_file` | yes | yes |
 | `prefix_ceiling` | yes | yes |
 | `local_validation` turned on or off | yes (the key is present only when true, so turning it off removes it) | yes |
+| `routine_claim_fingerprint` turned on or off | yes (present only when true) | yes |
+| New commit (HEAD moves), advisory workspace | no (`expected_head` is excluded) | no |
 | `require_test_output` turned on or off | yes | yes |
 | `allowed_prefixes` without a ceiling | yes | yes |
 | `allowed_prefixes` within `prefix_ceiling`, via `registry-prefixes` | no | no |
@@ -138,17 +141,17 @@ Consequences:
 | `rerun` (argv, cwd, env, `timeout_seconds`) | no | no |
 | Task-level `execution_timeout` | no (stored in the manifest) | no |
 
-"Repaste" means regenerating the Routine material, pasting it into the actual Routine, and confirming the binding locally. Other fields that appear in the policy also feed the fingerprint; treat any change to them like the first group: `git_gate` (when not `strict`, so switching to or from `advisory` changes it), `expected_machine`, `execution_profile` (when present; the wizard writes it), `expected_head`, `policy_revision`, credential targets, `test_selection`, `allow_globs`, `glob_max_files`, `other_prefixes`, and for each test command its `id`, `task_types`, `argv` and `applies_to`.
+"Repaste" means regenerating the Routine material, pasting it into the actual Routine, and confirming the binding locally. Other fields that appear in the policy also feed the fingerprint; treat any change to them like the first group: `git_gate` (when not `strict`, so switching to or from `advisory` changes it), `expected_machine`, `execution_profile` (when present; the wizard writes it), `expected_head` (strict workspaces only), `policy_revision`, credential targets, `test_selection`, `allow_globs`, `glob_max_files`, `other_prefixes`, and for each test command its `id`, `task_types`, `argv` and `applies_to`.
 
 ## Checks after registering
 
 - `python -B -m grokbot_mcp.admin_cli registry-check --registry <registry.json> [--workspace <id>]` (ships with the registry-check change). Read-only: reports `ok`, `missing` or `unchecked` for each `argv` and `rerun.argv` cwd, explicit executable path, unittest module and test file inside the root. Bare executable names are `unchecked`. It executes nothing and searches no PATH; it is a filesystem hint, not proof the tests run.
-- `grokbot-mcp routine-check --registry <registry.json> --workspace <id>`. Local packets only; it cannot verify the remote Routine. With the fingerprint change it also warns when the pasted claim command lacks `--expect-fingerprint`.
+- `grokbot-mcp routine-check --registry <registry.json> --workspace <id>`. Local packets only; it cannot verify the remote Routine. For a workspace with `routine_claim_fingerprint: true` it also warns when the pasted claim command lacks `--expect-fingerprint`.
 - `grok_preflight`: read `runtime_drift` (restart the MCP process if `process_restart_recommended` appears) and, with the registry-check change, `test_command_check`, which does not change `local_ready`.
 
 ## Fingerprint at claim (ships with the claim-fingerprint change)
 
-New packets render the Execute claim command with `--expect-fingerprint <policy_fingerprint from this paste packet>`. If the current policy differs, claim returns `routine_binding_mismatch` before writing anything; the Routine must stop without editing files and the administrator pastes an updated Routine. This is a local comparison, not verification of the remote Routine text.
+The claim fingerprint is off by default; generated Routine text then has no `--expect-fingerprint`. For a workspace with `routine_claim_fingerprint: true`, new packets render the Execute claim command with `--expect-fingerprint <policy_fingerprint from this paste packet>`. For an advisory workspace the fingerprint excludes `expected_head` whether or not the option is on, so ordinary commits do not invalidate the Routine; the fingerprint of an existing advisory binding changes once and needs regenerated material, an updated Routine and a reconfirmed binding. If the current policy differs, claim returns `routine_binding_mismatch` before writing anything; the Routine must stop without editing files and the administrator pastes an updated Routine. This is a local comparison, not verification of the remote Routine text.
 
 ## Common problems
 

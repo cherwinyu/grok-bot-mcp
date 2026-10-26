@@ -42,7 +42,23 @@ $BridgePython = 'C:\ExampleBridgeCandidate\Scripts\python.exe'
 
 For this fictional example, enter root `C:\ExampleWorkspace`; allowed files `src/counter.py` and `tests/test_counter.py` (one per line, then an empty line); protected file `README.md`; command ID `python_unittest`; and the test instruction `Run the installed Python interpreter -m unittest discover -s tests -t . from the registered root`. Review the displayed registration before saving. Write permission is a separate explicit choice; leaving it off does not mean installation is broken.
 
-A custom registry may be selected with `--registry <absolute-path>`. Use that same selection for resume, diagnostics, claim and cancellation. The generated client config already carries it. The default is `%LOCALAPPDATA%\grokbot-mcp\registry.json`.
+A custom registry may be selected with `--registry <absolute-path>`. Use that same selection for resume, diagnostics, claim and cancellation. The generated client config already carries it. The default is `%LOCALAPPDATA%\grokbot-mcp\registry.json`. A `registry.json` saved with a UTF-8 BOM is read as is; the wizard writes it back without a BOM.
+
+A newly registered workspace gets `git_gate: "advisory"` by default; pass `--git-gate strict` to register with the strict gate instead. When strict is requested explicitly and the workspace has uncommitted changes, the wizard prints a hint to consider advisory and still registers strict. Existing registry entries that omit `git_gate` stay strict. The Routine claim fingerprint is off by default for every workspace: generated Routine text then has no `--expect-fingerprint`, and `routine_check` accepts that. Pass `--claim-fingerprint` on the first registration to turn it on (see [Routine fingerprint at claim](advisory-workspaces.md#routine-fingerprint-at-claim)).
+
+### Scripted first registration
+
+For a new workspace the wizard can also run without prompts. `--yes` requires `--workspace` and, for the first registration, `--root`, `--protected-file`, `--test-command`, `--test-instruction` and at least one of `--allow-file` (repeatable), `--allowed-prefix` or `--prefix-ceiling` (both repeatable, written `dir/:.md,.py`). Optional: `--local-validation`, `--claim-fingerprint`, `--allow-writes` (written as `writes_enabled: true` on first registration), `--other-prefix`. `--allowed-prefix` and `--other-prefix` need the advisory gate, and `--local-validation` is rejected with strict. The registration options other than `--allow-writes` are rejected for an existing workspace and with `--generate-only` (`invalid_arguments`); with `--check`, any option that writes is rejected. On an existing workspace `--allow-writes` alone follows the existing confirmation flow, and with `--generate-only` or `--check` it is rejected; `--yes` is likewise rejected together with `--replace-credentials` or `--reconfirm-bindings`.
+
+Credentials can come from environment variables instead of hidden prompts: `--validate-url-env NAME --validate-key-env NAME` and `--execute-url-env NAME --execute-key-env NAME`. Values are never echoed. A missing pair, an invalid variable name, or a missing or empty variable stops with `credential_env_pair_required`, `credential_env_name_invalid`, `credential_env_missing` or `credential_env_empty`; a value the credential checks refuse gives `credential_rejected`. With `--yes`, `REGISTRATION_SAVED` means only that the registration was saved: the wizard does not ask about credentials not supplied this way and does not confirm any Routine binding. Continue with the same command without the first-registration options, or run `--check`.
+
+A single credential can be stored without the wizard:
+
+```powershell
+& $BridgePython -I -X utf8 -m grokbot_mcp.init_credentials --target grokbot-mcp/demo-workspace/validate --url-env EXAMPLE_URL_VAR --key-env EXAMPLE_KEY_VAR
+```
+
+`--stdin` instead reads two lines from standard input, the URL then the key, with no confirmation prompt. `--stdin` and the environment options cannot be combined, and `--url-env` and `--key-env` must be given together. Without either, the existing hidden prompts apply. Values are not echoed and not included in errors. Exit code 2: `credential_arguments_invalid`, `credential_input_conflict`, `credential_env_pair_required`, `credential_env_name_invalid`, `credential_mismatch`. Exit code 1: `credential_env_missing`, `credential_env_empty`, `credential_stdin_incomplete`, `credential_input_unavailable`, `credential_rejected`.
 
 ## 4. Complete the generated Grok Bot packet
 
