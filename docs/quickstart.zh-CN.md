@@ -2,7 +2,7 @@
 
 [English](quickstart.md) · [首页](../README.zh-CN.md)
 
-本文对应 **0.1.4b1 实验性 Beta**。首次使用应从离线演示开始，无需账号或密钥；真实配置只在用户明确审核并授权后进行。[支持矩阵](beta-support.zh-CN.md) · [Cursor/Codex 配置](client-compatibility.zh-CN.md) · [常见问题](faq.zh-CN.md)。
+本文对应 **0.1.5 实验性版本**。首次使用应从离线演示开始，无需账号或密钥；真实配置只在用户明确审核并授权后进行。[支持矩阵](beta-support.zh-CN.md) · [Cursor/Codex 配置](client-compatibility.zh-CN.md) · [常见问题](faq.zh-CN.md)。
 
 ## 1. 获取并安装候选源码
 
