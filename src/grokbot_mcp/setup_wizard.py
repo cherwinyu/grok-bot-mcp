@@ -65,7 +65,7 @@ def yes(prompt: str) -> bool:
 
 
 def register(registry: Path, workspace_id: str, *, mode: str = "create",
-             git_gate: str = "strict", other_prefixes: list[str] | None = None) -> None:
+             git_gate: str = "advisory", other_prefixes: list[str] | None = None) -> None:
     """Add one workspace, preserving all previously registered entries."""
     _configure_console()
     safe_path(registry)
@@ -317,8 +317,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--export", type=Path, help="With --check: preview minimal JSON, then ask before creating this file")
     parser.add_argument("--generate-only", action="store_true", help="Regenerate local instruction packet; no binding changes")
     parser.add_argument("--routine-mode", choices=MODES, help="reuse keeps Routine/Webhook but upgrades the claim entry")
-    parser.add_argument("--git-gate", choices=("strict", "advisory"), default="strict",
-                        help="Git gate for a newly registered workspace; strict is byte-compatible default")
+    parser.add_argument("--git-gate", choices=("strict", "advisory"), default=None,
+                        help="Git gate for a newly registered workspace; defaults to advisory. "
+                             "Existing registrations without git_gate stay strict")
     parser.add_argument("--other-prefix", action="append", default=[],
                         help="Other writers' relative directory prefix; new advisory registrations only / 其他会话目录前缀")
     parser.add_argument("--replace-credentials", action="store_true", help="Explicit replacement prompts, never automatic")
@@ -328,8 +329,9 @@ def main(argv: list[str] | None = None) -> int:
         args = parser.parse_args(argv)
         readonly_details = args.json or args.export or args.task_id or args.execution_id or args.purpose != "setup"
         writes = (args.generate_only or args.replace_credentials or args.reconfirm_bindings
-                  or args.allow_writes or args.routine_mode or args.git_gate != "strict" or args.other_prefix)
-        if args.other_prefix and (args.git_gate != "advisory" or args.generate_only):
+                  or args.allow_writes or args.routine_mode or args.git_gate is not None or args.other_prefix)
+        git_gate = args.git_gate or "advisory"
+        if args.other_prefix and (git_gate != "advisory" or args.generate_only):
             raise ValueError("invalid_arguments")
         if (readonly_details and not args.check) or (args.check and writes):
             raise ValueError("invalid_arguments")
@@ -377,7 +379,7 @@ def main(argv: list[str] | None = None) -> int:
             print(generate(registry, workspace_id, mode))
             return 0
         if workspace_id not in existing:
-            register(registry, workspace_id, mode=mode, git_gate=args.git_gate,
+            register(registry, workspace_id, mode=mode, git_gate=git_gate,
                      **({"other_prefixes": args.other_prefix} if args.other_prefix else {}))
         if args.allow_writes:
             allow_writes(registry, workspace_id)
