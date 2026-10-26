@@ -23,23 +23,25 @@
 
 ## 完成度
 
-实验性 Beta，尚非生产就绪。`main` 上 `src/grokbot_mcp/__init__.py` 的版本是 `0.1.5b5`。
+实验性项目，尚非生产就绪。`src/grokbot_mcp/__init__.py` 中的版本是 `0.1.5`。
 
-**已发布：** GitHub 上唯一的 Release 是预发行版 `v0.1.4b1`（"Experimental Windows Beta"，也是唯一的 tag）。没有 PyPI 包。
+**发布情况：** 0.1.5 是本实验线第一个非预发行版本；实际已发布内容以 [GitHub Releases](https://github.com/cherwinyu/grok-bot-mcp/releases) 为准；此前的预发行版为 `v0.1.4b1`。没有 PyPI 包。
 
-**已合入 `main`，但尚无 tag 和 Release**（0.1.5b2–b5，见 [CHANGELOG](CHANGELOG.md)）：
-- advisory 本地校验；
+**0.1.5 相对 `v0.1.4b1` 的主要变化**（见 [CHANGELOG](CHANGELOG.md)）：
+- 可选的目录授权与前缀上限，前缀授权默认排除治理路径；
+- advisory `git_gate` 与 advisory 本地校验；
+- 有上限的状态等待；
 - 针对 `test_evidence_missing` 的 Bridge 本机补充复跑证据（`succeeded_bridge_evidence` / `failed_bridge_evidence`，原结果保持冻结）；
 - 执行超时上限 3600 秒；
 - 只读的 `admin_cli registry-check` 与 `grok_preflight.test_command_check`；
 - `claim_cli --expect-fingerprint`；
-- 前缀授权默认排除治理路径；
+- 运行时漂移提示，并建议重启进程；
 - `protected_or_forbidden_changed` 会指出所涉及的保护路径或禁止路径；
 - 仅作示例的脚本 `scripts/grok_run_example.py`（不是受支持的接口）。
 
 **未完成或未证明：**
-- 对 0.1.5b5，[ROADMAP](ROADMAP.md) 中的 Beta 发布门尚无完成证据：发布包版本与 SHA 核验、最终提交上的 Windows 已安装 wheel stdio 与虚构双安装验收、隐私与权利审查、人工发布批准。
-- Stable 里程碑尚未开始：真实客户端/provider 兼容证据、支持矩阵、由 OS 强制的受限执行器、安全响应流程。
+- 每次发布的检查证据写在对应 GitHub Release 说明中。
+- [ROADMAP](ROADMAP.md) 中的 Stable 里程碑尚未开始：真实客户端/provider 兼容证据、支持矩阵、由 OS 强制的受限执行器、安全响应流程。
 - 公开 CI 会检查已安装的 wheel、配置片段格式和虚构的 stdio，但不能证明真实客户端 UI 重连，也不能证明真实 Grok Bot 的结果。
 
 **明确推迟：** PyPI、MCP Registry、其他平台、GUI、公开 shell 执行，以及未知提交后的自动重试。

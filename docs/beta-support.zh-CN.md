@@ -2,7 +2,7 @@
 
 [English](beta-support.md) · [首页](../README.zh-CN.md) · [数据边界](data-boundaries.zh-CN.md)
 
-- **0.1.4b1 为实验性 Beta 系列，实际发行状态以 GitHub Releases 为准。**
+- **0.1.5 为实验性版本，实际发行状态以 GitHub Releases 为准。**
 - 当前目标：Windows 11、Python 3.12、Git、MCP stdio；依赖固定 `mcp==2.3.0`。
 - 真实运行还需要用户配置的 Grok Bot Routine Bearer Webhook 与另外批准的 Windows 桌面命令。
 

@@ -26,7 +26,7 @@ This document is **not** authority to change visibility, create a Git tag, publi
 - Verify real GitHub branch/ruleset enforcement; CODEOWNERS alone is not protection. Account-plan limitations must be recorded.
 - Enable private vulnerability reporting and supported dependency/secret-security features through the repository Settings as permitted.
 - Record a private, independently reviewed GO/NO-GO statement with any gaps.
-- **STOP** before converting to Public, creating `v0.1.4b1` and publishing GitHub prerelease; all require the owner's separate affirmative release authorization.
+- **STOP** before converting to Public, creating the release tag and publishing the GitHub Release; all require the owner's separate affirmative release authorization.
 - After authorization, attach only the reviewed wheel/sdist/source ZIP/SHA256SUMS and check public downloads, hashes, refs, logs and actual security settings.
 
 Do not include real Grok Bot account keys, internal acceptance reports, screenshots of credential-bearing screens, dependency wheelhouse, personal audit markers or original development history in a public release.

@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.1.5
+
+- First non-prerelease version of this experimental line; it is not the
+  ROADMAP Stable milestone. It includes every change since `v0.1.4b1`: the
+  [0.1.5b5](#015b5), [0.1.5b4](#015b4), [0.1.5b3](#015b3) and
+  [0.1.5b2](#015b2) entries, the [Unreleased](#unreleased) entry merged before
+  0.1.5b2, and [0.1.5b1](#015b1-experimental-beta).
+- When a tool returns `internal_error` and the installed package bytes have
+  changed since the MCP process started, the result adds the warning
+  `process_restart_recommended` and a `next_step` to restart the MCP client
+  process without resending or retrying submissions. The error code, `reason`
+  and existing fields are unchanged; if the drift check itself fails, the
+  original error is returned as before.
+- The example-only `scripts/grok_run_example.py` now reports `TIMEOUT_PENDING`
+  (`wait_budget_exhausted`) when its local wait budget cancels a
+  `grok_get_status` call before the monotonic deadline, as Windows timers can
+  do; it previously reported `STATUS_UNKNOWN`. It remains an example, not a
+  supported interface.
+- README adds overview, core idea and status sections, and the Chinese README
+  wording is polished.
+- Apart from the version banner in generated Routine material, this update does
+  not change `policy_fingerprint` semantics, the seven MCP tools or frozen
+  evidence, and it does not authorize PyPI or any operation beyond the
+  maintainer-approved GitHub Release.
+
 ## 0.1.5b5
 
 - `protected_or_forbidden_changed` diagnostics now name up to 10 offending

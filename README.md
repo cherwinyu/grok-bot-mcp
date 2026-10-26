@@ -23,15 +23,15 @@ Design overview: [architecture](docs/architecture.md).
 
 ## Status
 
-Experimental Beta; not production-ready. The version in `src/grokbot_mcp/__init__.py` on `main` is `0.1.5b5`.
+Experimental; not production-ready. The version in `src/grokbot_mcp/__init__.py` is `0.1.5`.
 
-**Published:** the only GitHub Release is the prerelease `v0.1.4b1` ("Experimental Windows Beta", the only tag). No PyPI package.
+**Releases:** 0.1.5 is the first non-prerelease version of this experimental line; check [GitHub Releases](https://github.com/cherwinyu/grok-bot-mcp/releases) for what is actually published. The earlier prerelease is `v0.1.4b1`. No PyPI package.
 
-**Merged on `main`, not tagged or released** (0.1.5b2–b5, see [CHANGELOG](CHANGELOG.md)): advisory local validation; supplemental bridge-rerun evidence for `test_evidence_missing` (`succeeded_bridge_evidence` / `failed_bridge_evidence`, original result stays frozen); execution timeout ceiling of 3600 seconds; read-only `admin_cli registry-check` and `grok_preflight.test_command_check`; `claim_cli --expect-fingerprint`; governance paths excluded by default from prefix authorizations; `protected_or_forbidden_changed` names the protected or forbidden paths involved; the example-only script `scripts/grok_run_example.py` (not a supported interface).
+**Main changes in 0.1.5 since `v0.1.4b1`** (see [CHANGELOG](CHANGELOG.md)): opt-in directory authorization with a prefix ceiling, governance paths excluded by default; advisory `git_gate` and advisory local validation; bounded status waits; supplemental bridge-rerun evidence for `test_evidence_missing` (`succeeded_bridge_evidence` / `failed_bridge_evidence`, original result stays frozen); execution timeout ceiling of 3600 seconds; read-only `admin_cli registry-check` and `grok_preflight.test_command_check`; `claim_cli --expect-fingerprint`; runtime drift reporting with a process-restart recommendation; `protected_or_forbidden_changed` names the protected or forbidden paths involved; the example-only script `scripts/grok_run_example.py` (not a supported interface).
 
 **Not done or not demonstrated:**
-- The [ROADMAP](ROADMAP.md) Beta gates have no completion evidence for 0.1.5b5: release-archive version and SHA verification, Windows installed-wheel stdio and fictional two-installation acceptance on the final commit, privacy/rights review, and human release approval.
-- Stable milestone not started: real client/provider compatibility evidence, a support matrix, an OS-enforced restricted executor, a security response procedure.
+- The check evidence for each release is recorded in that GitHub Release's description.
+- [ROADMAP](ROADMAP.md) Stable milestone not started: real client/provider compatibility evidence, a support matrix, an OS-enforced restricted executor, a security response procedure.
 - Public CI checks the installed wheel, config-fragment format and fictional stdio, but does not prove real client UI reconnect or real Grok Bot results.
 
 **Deferred:** PyPI, MCP Registry, other platforms, GUI, public shell execution, automatic retry after an unknown submission.
