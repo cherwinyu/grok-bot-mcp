@@ -42,7 +42,23 @@ $BridgePython = 'C:\ExampleBridgeCandidate\Scripts\python.exe'
 
 示例中填写根目录 `C:\ExampleWorkspace`；允许修改 `src/counter.py` 和 `tests/test_counter.py`（逐行输入，再输入空行）；保护文件 `README.md`；测试命令 ID 为 `python_unittest`；测试说明为“从登记根目录，用当前安装的 Python 解释器执行 `-m unittest discover -s tests -t .`”。保存前审查展示的登记内容。写许可需要单独明确同意；关闭不表示安装损坏。
 
-自定义登记文件使用 `--registry <绝对路径>`，恢复向导、诊断、领取及取消时须使用同一选择。生成的 MCP 配置已包含该路径。默认位置为 `%LOCALAPPDATA%\grokbot-mcp\registry.json`。
+自定义登记文件使用 `--registry <绝对路径>`，恢复向导、诊断、领取及取消时须使用同一选择。生成的 MCP 配置已包含该路径。默认位置为 `%LOCALAPPDATA%\grokbot-mcp\registry.json`。带 UTF-8 BOM 的 `registry.json` 可直接读取；向导写回时不带 BOM。
+
+向导新登记的工作区默认 `git_gate: "advisory"`；用 `--git-gate strict` 可改为 strict。显式选择 strict 且工作区有未提交改动时，向导会提示考虑 advisory，但仍按 strict 登记。已有登记条目省略 `git_gate` 时仍是 strict。Routine 认领指纹对所有工作区默认关闭：生成的 Routine 文本不含 `--expect-fingerprint`，`routine_check` 接受。首次登记时加 `--claim-fingerprint` 可打开（见[claim 时核对 Routine 指纹](advisory-workspaces.zh-CN.md#claim-时核对-routine-指纹)）。
+
+### 脚本化首次登记
+
+新工作区也可以不提问登记。`--yes` 需要 `--workspace`；首次登记还需要 `--root`、`--protected-file`、`--test-command`、`--test-instruction`，以及 `--allow-file`（可重复）、`--allowed-prefix`、`--prefix-ceiling`（后两者可重复，写作 `dir/:.md,.py`）中至少一项。可选：`--local-validation`、`--claim-fingerprint`、`--allow-writes`（首次登记时直接写入 `writes_enabled: true`）、`--other-prefix`。`--allowed-prefix` 与 `--other-prefix` 需要 advisory 门，`--local-validation` 与 strict 同用会被拒绝。除 `--allow-writes` 外的登记参数用于已有工作区或 `--generate-only` 时被拒绝（`invalid_arguments`），与 `--check` 同用时任何会写入的选项都被拒绝。已有工作区单独使用 `--allow-writes` 沿用原有确认流程，与 `--generate-only` 或 `--check` 同用则被拒绝；`--yes` 与 `--replace-credentials` 或 `--reconfirm-bindings` 同用同样被拒绝。
+
+凭据可以用环境变量代替隐藏输入：`--validate-url-env NAME --validate-key-env NAME` 与 `--execute-url-env NAME --execute-key-env NAME`。值不会回显。缺少成对参数、变量名非法、变量缺失或为空时分别以 `credential_env_pair_required`、`credential_env_name_invalid`、`credential_env_missing`、`credential_env_empty` 停止；值未通过凭据检查为 `credential_rejected`。使用 `--yes` 时，`REGISTRATION_SAVED` 只表示登记已保存：向导不会就未以此方式提供的凭据提问，也不会确认任何 Routine 绑定。之后用不含首次登记参数的同一命令继续，或运行 `--check`。
+
+不经向导也可单独保存一份凭据：
+
+```powershell
+& $BridgePython -I -X utf8 -m grokbot_mcp.init_credentials --target grokbot-mcp/demo-workspace/validate --url-env EXAMPLE_URL_VAR --key-env EXAMPLE_KEY_VAR
+```
+
+`--stdin` 改为从标准输入读取两行：URL，然后密钥，无确认提示。`--stdin` 不能与环境变量选项同用，`--url-env` 与 `--key-env` 必须成对。两者都不给时仍是原有隐藏输入。值不回显，也不会出现在错误中。退出码 2：`credential_arguments_invalid`、`credential_input_conflict`、`credential_env_pair_required`、`credential_env_name_invalid`、`credential_mismatch`。退出码 1：`credential_env_missing`、`credential_env_empty`、`credential_stdin_incomplete`、`credential_input_unavailable`、`credential_rejected`。
 
 ## 4. 集中完成生成的 Grok Bot 清单
 

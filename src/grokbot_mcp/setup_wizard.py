@@ -22,8 +22,10 @@ from grokbot_mcp.registry import (
     routine_profile,
 )
 from grokbot_mcp.routine import MODES, confirmation, read_routine, routine_readiness
-from grokbot_mcp.security.gitcheck import git_error, git_snapshot, workspace_git_rejection
+from grokbot_mcp.security.gitcheck import workspace_git_rejection
+from grokbot_mcp.security.gitread import run_git
 from grokbot_mcp.security.paths import is_reparse_point
+from grokbot_mcp.security.prefixes import prefix_json
 from grokbot_mcp.security.targets import TargetRejected, resolve_exact_files
 from grokbot_mcp.storage import utc_now, read_json
 from grokbot_mcp.strict_json import check_size
@@ -65,7 +67,13 @@ def yes(prompt: str) -> bool:
 
 
 def register(registry: Path, workspace_id: str, *, mode: str = "create",
-             git_gate: str = "strict", other_prefixes: list[str] | None = None) -> None:
+             git_gate: str = "advisory", other_prefixes: list[str] | None = None,
+             root: Path | None = None, allowed_files: list[str] | None = None,
+             protected_file: str | None = None, test_command: str | None = None,
+             test_instruction: str | None = None, allowed_prefixes: list[str] | None = None,
+             prefix_ceiling: list[str] | None = None, local_validation: bool = False,
+             claim_fingerprint: bool = False, writes_enabled: bool = False,
+             noninteractive: bool = False) -> None:
     """Add one workspace, preserving all previously registered entries."""
     _configure_console()
     safe_path(registry)
@@ -75,11 +83,17 @@ def register(registry: Path, workspace_id: str, *, mode: str = "create",
         raise ValueError("invalid_git_gate")
     if other_prefixes and git_gate != "advisory":
         raise ValueError("invalid_git_gate")
+    if allowed_prefixes and git_gate != "advisory":
+        raise ValueError("invalid_arguments")
+    if noninteractive and (root is None or not protected_file or not test_command or not test_instruction
+                           or not (allowed_files or allowed_prefixes or prefix_ceiling)):
+        raise ValueError("invalid_arguments")
     before = registry.read_bytes() if registry.exists() else None
     existing = load_registry(registry) if registry.exists() else {}
     if workspace_id in existing:
         return
-    root = Path(input("工作区绝对路径（已有 Git 提交）: ").strip().strip('"'))
+    if root is None:
+        root = Path(input("工作区绝对路径（已有 Git 提交）: ").strip().strip('"'))
     if not root.is_absolute():
         raise ValueError("absolute_root_required")
     safe_path(root)
@@ -89,20 +103,28 @@ def register(registry: Path, workspace_id: str, *, mode: str = "create",
         raise ValueError(rejection)
     head = subprocess.run(["git", "-C", str(root), "rev-parse", "HEAD"],
                           capture_output=True, text=True, check=True, encoding="utf-8", errors="replace").stdout.strip()
-    print("逐行输入允许修改的文件（相对工作区路径），空行结束。不支持通配符。")
-    allowed = []
-    while value := input("文件: ").strip():
-        allowed.append(value)
-    protected = input("保护文件（已存在、不可修改的相对路径）: ").strip().replace("\\", "/")
+    if git_gate == "strict":
+        status = run_git(root, ["status", "--porcelain"])
+        if status.returncode == 0 and status.stdout.strip():
+            print("提示：工作区有未提交改动，建议使用 --git-gate advisory；本次仍按 strict 登记。")
+    allowed = list(allowed_files or [])
+    if allowed_files is None and not noninteractive:
+        print("逐行输入允许修改的文件（相对工作区路径），空行结束。不支持通配符。")
+        while value := input("文件: ").strip():
+            allowed.append(value)
+    protected = (protected_file if protected_file is not None else input(
+        "保护文件（已存在、不可修改的相对路径）: ")).strip().replace("\\", "/")
     if git_gate == "advisory":
         from grokbot_mcp.security.paths import normalize_policy_path
         allowed = [normalize_policy_path(name) for name in allowed]
         protected = normalize_policy_path(protected)
     resolve_exact_files(root, [protected], (".git", ".bridge"))
     forbidden = [".git", ".bridge", protected]
-    allowed = resolve_exact_files(root, allowed, tuple(forbidden))
-    command = input("测试命令 ID（例如 python_unittest）: ").strip()
-    instruction = input("该 ID 对应的测试运行说明（例如 python -m unittest discover -s tests）: ").strip()
+    if allowed or not (allowed_prefixes or prefix_ceiling):
+        allowed = resolve_exact_files(root, allowed, tuple(forbidden))
+    command = (test_command if test_command is not None else input("测试命令 ID（例如 python_unittest）: ")).strip()
+    instruction = (test_instruction if test_instruction is not None else input(
+        "该 ID 对应的测试运行说明（例如 python -m unittest discover -s tests）: ")).strip()
     if not command or command == "none" or not instruction:
         raise ValueError("test_command_required")
     item = {
@@ -115,7 +137,7 @@ def register(registry: Path, workspace_id: str, *, mode: str = "create",
         ],
         "validate_credential_target": f"grokbot-mcp/{workspace_id}/validate",
         "execute_credential_target": f"grokbot-mcp/{workspace_id}/execute",
-        "expected_machine": os.environ.get("COMPUTERNAME", ""), "writes_enabled": False,
+        "expected_machine": os.environ.get("COMPUTERNAME", ""), "writes_enabled": writes_enabled,
         "setup_test_instructions": {"none": "Do not run tests.", command: instruction},
         "setup_routine_mode": mode,
     }
@@ -124,15 +146,32 @@ def register(registry: Path, workspace_id: str, *, mode: str = "create",
     if other_prefixes:
         from grokbot_mcp.security.paths import normalize_policy_path
         item["other_prefixes"] = list(dict.fromkeys(normalize_policy_path(p, casefold=True) for p in other_prefixes))
-    _workspace(item)
+    for field, specs in (("allowed_prefixes", allowed_prefixes), ("prefix_ceiling", prefix_ceiling)):
+        if specs is not None:
+            entries = []
+            for spec in specs:
+                prefix, separator, extensions = spec.partition(":")
+                if not separator:
+                    raise ValueError("invalid_arguments")
+                entries.append({"prefix": prefix, "exts": extensions.split(",")})
+            item[field] = entries
+    if local_validation:
+        item["local_validation"] = True
+    if claim_fingerprint:
+        item["routine_claim_fingerprint"] = True
+    proposed = _workspace(item)
+    for field in ("allowed_prefixes", "prefix_ceiling"):
+        if field in item:
+            item[field] = prefix_json(proposed, ceiling=field == "prefix_ceiling")
     if any(w.root.resolve() == root for w in existing.values()):
         raise ValueError("workspace_root_already_registered")
     print(json.dumps(item, ensure_ascii=False, indent=2))
-    if not yes("保存以上登记配置？"):
+    if not noninteractive and not yes("保存以上登记配置？"):
         raise ValueError("registration_cancelled")
-    item["writes_enabled"] = yes("允许此工作区准备任务并修改白名单文件？Webhook 总开关仍独立控制")
+    if not writes_enabled and not noninteractive:
+        item["writes_enabled"] = yes("允许此工作区准备任务并修改白名单文件？Webhook 总开关仍独立控制")
     # Refuse to overwrite a registry edited while the administrator answered prompts.
-    raw = json.loads(registry.read_text(encoding="utf-8")) if registry.exists() else {"schema_version": 1, "workspaces": []}
+    raw = json.loads(registry.read_text(encoding="utf-8-sig")) if registry.exists() else {"schema_version": 1, "workspaces": []}
     current = load_registry(registry) if registry.exists() else {}
     if current != existing or (registry.read_bytes() if registry.exists() else None) != before:
         raise ValueError("registry_changed_retry")
@@ -153,12 +192,13 @@ def generate(registry: Path, workspace_id: str, mode: str = "reuse") -> Path:
     profile["root"] = str(workspace.root)
     profile.pop("validate_credential_target")
     profile.pop("execute_credential_target")
-    raw = json.loads(registry.read_text(encoding="utf-8"))
+    raw = json.loads(registry.read_text(encoding="utf-8-sig"))
     entry = next(w for w in raw["workspaces"] if w["workspace_id"] == workspace_id)
     instructions = entry.get("setup_test_instructions", {})
     from grokbot_mcp.routine import claim_command
     from grokbot_mcp.registry import policy_fingerprint
-    claim = "& '" + interpreter().replace("'", "''") + "' -I -X utf8 -m " + claim_command(workspace_id, policy_fingerprint(workspace))
+    claim = "& '" + interpreter().replace("'", "''") + "' -I -X utf8 -m " + claim_command(
+        workspace_id, policy_fingerprint(workspace) if workspace.routine_claim_fingerprint else None)
     guidance = {
         "reuse": "复用旧 Routine/Webhook，更新领取入口：reuse_scope=retain-routine-update-claim。"
                  "保留原 Routine、Webhook 和凭据，不创建重复项；先核对目录、工作区 ID、基线和白名单。"
@@ -317,23 +357,59 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--export", type=Path, help="With --check: preview minimal JSON, then ask before creating this file")
     parser.add_argument("--generate-only", action="store_true", help="Regenerate local instruction packet; no binding changes")
     parser.add_argument("--routine-mode", choices=MODES, help="reuse keeps Routine/Webhook but upgrades the claim entry")
-    parser.add_argument("--git-gate", choices=("strict", "advisory"), default="strict",
-                        help="Git gate for a newly registered workspace; strict is byte-compatible default")
+    parser.add_argument("--git-gate", choices=("strict", "advisory"), default=None,
+                        help="Git gate for a newly registered workspace; defaults to advisory. "
+                             "Existing registrations without git_gate stay strict")
     parser.add_argument("--other-prefix", action="append", default=[],
                         help="Other writers' relative directory prefix; new advisory registrations only / 其他会话目录前缀")
+    parser.add_argument("--allowed-prefix", action="append", help="New advisory registration: dir/:.md,.py (repeatable)")
+    parser.add_argument("--prefix-ceiling", action="append", help="New registration: maximum dir/:.md,.py grant (repeatable)")
+    parser.add_argument("--local-validation", action="store_true", help="New advisory registration: validate locally")
+    parser.add_argument("--claim-fingerprint", action="store_true", help="New registration: opt into Routine claim fingerprint")
+    parser.add_argument("--root", type=Path, help="New registration: absolute Git workspace root")
+    parser.add_argument("--allow-file", action="append", help="New registration: exact relative file (repeatable)")
+    parser.add_argument("--protected-file", help="New registration: existing protected relative file")
+    parser.add_argument("--test-command", help="New registration: code-test command ID")
+    parser.add_argument("--test-instruction", help="New registration: instructions for the test command")
+    parser.add_argument("--yes", action="store_true", help="New registration without prompts; does not confirm Routine bindings")
+    for phase in ("validate", "execute"):
+        parser.add_argument(f"--{phase}-url-env", metavar="NAME", help=f"New registration: {phase} URL environment variable")
+        parser.add_argument(f"--{phase}-key-env", metavar="NAME", help=f"New registration: {phase} key environment variable")
     parser.add_argument("--replace-credentials", action="store_true", help="Explicit replacement prompts, never automatic")
     parser.add_argument("--reconfirm-bindings", action="store_true", help="Explicit administrator recheck of existing bindings")
     parser.add_argument("--allow-writes", action="store_true", help="Explicit reviewed workspace-write opt-in; never enables submission")
     try:
         args = parser.parse_args(argv)
+        registration = {
+            "root": args.root, "allowed_files": args.allow_file, "protected_file": args.protected_file,
+            "test_command": args.test_command, "test_instruction": args.test_instruction,
+            "allowed_prefixes": args.allowed_prefix, "prefix_ceiling": args.prefix_ceiling,
+        }
+        registration = {key: value for key, value in registration.items() if value is not None}
+        for key, value in (("local_validation", args.local_validation), ("claim_fingerprint", args.claim_fingerprint),
+                           ("noninteractive", args.yes)):
+            if value:
+                registration[key] = value
+        credential_sources = {
+            phase: argparse.Namespace(stdin=False, url_env=getattr(args, phase + "_url_env"),
+                                      key_env=getattr(args, phase + "_key_env"))
+            for phase in ("validate", "execute")
+            if getattr(args, phase + "_url_env") is not None or getattr(args, phase + "_key_env") is not None
+        }
+        new_options = bool(registration or credential_sources or args.other_prefix)
         readonly_details = args.json or args.export or args.task_id or args.execution_id or args.purpose != "setup"
         writes = (args.generate_only or args.replace_credentials or args.reconfirm_bindings
-                  or args.allow_writes or args.routine_mode or args.git_gate != "strict" or args.other_prefix)
-        if args.other_prefix and (args.git_gate != "advisory" or args.generate_only):
+                  or args.allow_writes or args.routine_mode or args.git_gate is not None or new_options)
+        git_gate = args.git_gate or "advisory"
+        if args.other_prefix and (git_gate != "advisory" or args.generate_only):
             raise ValueError("invalid_arguments")
         if (readonly_details and not args.check) or (args.check and writes):
             raise ValueError("invalid_arguments")
         if args.generate_only and (args.allow_writes or args.replace_credentials or args.reconfirm_bindings):
+            raise ValueError("invalid_arguments")
+        if args.generate_only and new_options:
+            raise ValueError("invalid_arguments")
+        if args.yes and (not args.workspace or args.replace_credentials or args.reconfirm_bindings):
             raise ValueError("invalid_arguments")
         registry = args.registry.absolute()
         workspace_id = args.workspace
@@ -362,24 +438,36 @@ def main(argv: list[str] | None = None) -> int:
         print("Python (absolute, no activation needed): " + interpreter())
         safe_path(registry)
         existing = load_registry(registry) if registry.exists() else {}
-        if args.other_prefix and workspace_id in existing:
-            raise ValueError("invalid_arguments")
         if not workspace_id:
             print("已登记工作区 / Registered: " + ", ".join(existing))
             workspace_id = input("工作区 ID / Workspace ID: ").strip()
+        if new_options and workspace_id in existing:
+            raise ValueError("invalid_arguments")
         saved_mode = None
         if workspace_id in existing:
-            raw = json.loads(registry.read_text(encoding="utf-8"))
+            raw = json.loads(registry.read_text(encoding="utf-8-sig"))
             entry = next(item for item in raw["workspaces"] if item["workspace_id"] == workspace_id)
             saved_mode = entry.get("setup_routine_mode")
         mode = args.routine_mode or (saved_mode if saved_mode in MODES else ("reuse" if workspace_id in existing else "create"))
         if args.generate_only:
             print(generate(registry, workspace_id, mode))
             return 0
+        # Reuse the credential initializer's reader and validator; never echo values.
+        credential_blobs = {}
+        for phase, source in credential_sources.items():
+            url, key = init_credentials.read_credentials(source)
+            try:
+                credential_blobs[phase] = init_credentials.pack_blob(url, key)
+            except (ValueError, UnicodeError):
+                raise init_credentials.CredentialInputError("credential_rejected") from None
+            finally:
+                url = key = ""
         if workspace_id not in existing:
-            register(registry, workspace_id, mode=mode, git_gate=args.git_gate,
-                     **({"other_prefixes": args.other_prefix} if args.other_prefix else {}))
-        if args.allow_writes:
+            if args.allow_writes:
+                registration["writes_enabled"] = True
+            register(registry, workspace_id, mode=mode, git_gate=git_gate,
+                     **({"other_prefixes": args.other_prefix} if args.other_prefix else {}), **registration)
+        elif args.allow_writes:
             allow_writes(registry, workspace_id)
         workspace = load_registry(registry)[workspace_id]
         # Never create or rewrite the submission switch. Missing means safe/off.
@@ -388,13 +476,22 @@ def main(argv: list[str] | None = None) -> int:
         output = generate(registry, workspace_id, mode)
         print("Grok Bot: copy this complete packet once / 集中复制说明: " + str(output / "routine-setup.md"))
         print("MCP client: copy the absolute-interpreter config / 客户端配置: " + str(output / "mcp-config.json"))
-        print("可现在退出，完成 Grok Bot 清单后用同一命令继续。/ Exit now and resume with the same command.")
+        if new_options:
+            print("完成 Grok Bot 清单后，使用 --registry 和 --workspace 继续；省略首次登记参数。")
+        else:
+            print("可现在退出，完成 Grok Bot 清单后用同一命令继续。/ Exit now and resume with the same command.")
         for phase, target, other in (("validate", workspace.validate_credential_target, workspace.execute_credential_target),
                                       ("execute", workspace.execute_credential_target, workspace.validate_credential_target)):
             present = status_for(target, (other,)) == "present"
             if present and not args.replace_credentials:
                 print("DONE: " + phase + " credential present; preserved / 已有凭据，保留")
-            elif yes("现在隐藏输入 " + phase + " 凭据？/ Enter credential now?"):
+            elif phase in credential_blobs:
+                try:
+                    init_credentials.store_credential(target, credential_blobs.pop(phase))
+                except (init_credentials.CredentialError, OSError, ValueError):
+                    raise init_credentials.CredentialInputError("credential_rejected") from None
+                print("credential_stored: " + phase)
+            elif not args.yes and yes("现在隐藏输入 " + phase + " 凭据？/ Enter credential now?"):
                 if init_credentials.main(["--target", target]) != 0:
                     print("Credential not saved / 凭据未保存，可稍后继续")
             routine = routine_readiness(workspace, phase, registry)
@@ -404,9 +501,15 @@ def main(argv: list[str] | None = None) -> int:
             print("请在 Grok Bot 核对 " + phase + " 的目录、工作区、策略、注册表和领取入口。")
             if phase == "execute":
                 print("必须更新领取入口：grokbot_mcp.claim_cli / claim-evidence-v2 / schema-v2 / claim_sha256；claim_dynamic.py 原样不支持。")
-            if yes("已逐项核对实际绑定并启用此 Routine？/ Confirm the checked, enabled Routine?"):
+            if not args.yes and yes("已逐项核对实际绑定并启用此 Routine？/ Confirm the checked, enabled Routine?"):
                 confirm_binding(registry, workspace_id, phase, mode)
+        if args.yes:
+            print("REGISTRATION_SAVED: 登记已保存；Routine 绑定仍需人工核对。使用不含首次登记参数的命令继续，或 --check 检查就绪状态。")
+            return 0
         return 0 if check(registry, workspace_id) else 1
+    except init_credentials.CredentialInputError as exc:
+        print(str(exc))
+        return 1
     except (EOFError, KeyboardInterrupt):
         print("\n已退出；已保存步骤保留，未保存的输入需重填。/ Resume with the same command.")
         return 130

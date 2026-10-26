@@ -110,18 +110,19 @@ class CeilingContractTest(unittest.TestCase):
         expected = {"validate": "91c6d72f05f6c65a0282dcda05fb6321ce321f4dcb4b6fbec4fe30c80dc7a9cd",
                     "execute": "ec6bd97b5b0ff4f3a704d26e6b153c8ca0d2f20fcc904311b0711477b20abbfe"}
         # Only the generated version banner changes with the release number.
+        ws = workspace(routine_claim_fingerprint=True)
         with patch("grokbot_mcp.materials.__version__", "0.1.4b1"):
             for phase, digest in expected.items():
                 text = render_routine(phase, workspace_root=Path("D:/fictional/workspace"),
                     workspace_id="example-workspace", registry=Path("D:/fictional/registry.json"),
-                    python=Path("D:/fictional/python.exe"), mode="reuse", test_options=routine_profile(workspace()))
+                    python=Path("D:/fictional/python.exe"), mode="reuse", test_options=routine_profile(ws))
                 from grokbot_mcp.routine import CLAIM_GUIDANCE, claim_command
                 self.assertIn(CLAIM_GUIDANCE, text)
                 if phase == "execute":
-                    self.assertIn(claim_command("example-workspace", policy_fingerprint(workspace())), text)
+                    self.assertIn(claim_command("example-workspace", policy_fingerprint(ws)), text)
                 # Only the new claim option/guidance is excluded from the
                 # pinned legacy bytes; all other template text stays frozen.
-                text = text.replace(" --expect-fingerprint " + policy_fingerprint(workspace()), "")
+                text = text.replace(" --expect-fingerprint " + policy_fingerprint(ws), "")
                 text = text.replace(CLAIM_GUIDANCE + "\n\n", "")
                 self.assertEqual(hashlib.sha256(text.encode("utf-8")).hexdigest(), digest)
         self.assertIn("active_prefixes_sha256", files("grokbot_mcp").joinpath(

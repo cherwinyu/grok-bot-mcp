@@ -10,7 +10,7 @@
 
 管理员在本地审核以下工作区字段；本指南不会修改安装、Routine、客户端、凭据或开关：
 
-- `git_gate: "advisory"` 启用[advisory 检查](security-model.md#strict-and-advisory-git-gates)，省略时仍为 `strict`。
+- `git_gate: "advisory"` 启用[advisory 检查](security-model.md#strict-and-advisory-git-gates)，向导新登记默认为 `advisory`（`--git-gate strict` 可改回）；已有登记省略该字段时仍为 `strict`。
 - `allowed_files` 仍为显式登记文件清单；`forbidden_files` 和 `protected_file` 排除指定路径及其后代。将私人配置、凭据、`.git`、`.bridge` 纳入适当保护；glob 始终排除后两者。
 - `other_prefixes`、`test_selection`、`test_commands[].applies_to`、`test_commands[].argv`、`require_test_output` 的定义集中在[测试策略、输出证据与 Git 复核](test-evidence-git-review.zh-CN.md)。前缀标签不授予改动权限。建议需要复核的项目要求测试输出，并明确选择测试 ID。
 - `allow_globs` 缺省 `false`；`glob_max_files` 缺省 `200`，必须为 `1..2000` 的整数，硬上限为 2000 个文件。非默认值参与策略指纹，需重新审核绑定。
@@ -231,7 +231,17 @@ false/省略时，在相同版本横幅下字节保持一致；升级到 0.1.5 �
 
 ## claim 时核对 Routine 指纹
 
-新的向导与迁移粘贴包为 execute claim 命令生成
+认领指纹对所有工作区默认关闭。在注册表条目中设置 `"routine_claim_fingerprint": true`
+（向导首次登记用 `--claim-fingerprint`）即可打开；非布尔值以 `routine_claim_fingerprint_invalid`
+拒绝。只有 `true` 计入策略指纹，因为它会改变 Routine 文本。关闭时，生成的 Routine 文本不含
+`--expect-fingerprint`，也没有比对该指纹的说明，`routine-check` 接受这样的命令，本地绑定仍记录并比较
+策略指纹。
+
+advisory 工作区无论该选项开关，`policy_fingerprint` 均不含 `expected_head`，普通提交不会使 Routine
+失效；准入时由桥自行测量 HEAD。strict 工作区不变。因此已有 advisory 绑定的策略指纹会变化一次：
+需重新生成材料、更新 Routine 并重新确认绑定。
+
+打开该选项后，新的向导与迁移粘贴包为 execute claim 命令生成
 `--expect-fingerprint <policy_fingerprint from this paste packet>`，实际值来自当前登记
 工作区的 `policy_fingerprint(workspace)`。必须使用本 Routine 粘贴包里的指纹，不要编造、
 改写或用任务提供的值替换。Validate 不领取 execution。绑定中的 `claim_entry` 和模板版本不变。
@@ -245,7 +255,8 @@ false/省略时，在相同版本横幅下字节保持一致；升级到 0.1.5 �
 
 不提供参数时保留原 claim 行为和输出，不新增成功字段。旧 Routine 仍兼容，但不会执行这项
 针对其自带指纹的额外比较。`routine-check` 将命令缺参数报告为
-`warnings` 中的 `routine_claim_fingerprint_missing`（建议更新），不会仅因此阻断就绪判定。
+`warnings` 中的 `routine_claim_fingerprint_missing`（建议更新），不会仅因此阻断就绪判定；仅当工作区设置
+`routine_claim_fingerprint: true` 时才报告。
 检查器仍识别原有完整模板；其他模板或绑定问题继续阻断。
 `routine_policy_fingerprint_missing` 表示包中缺少当前指纹；
 `routine_claim_fingerprint_mismatch` 表示命令提供的指纹过期或非法；这两项均阻断。

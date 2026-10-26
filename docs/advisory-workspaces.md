@@ -10,7 +10,7 @@ Use an explicitly registered advisory workspace when several operators share a c
 
 An administrator reviews these workspace fields locally; this guide does not modify an installation, Routine, client, credential or switch:
 
-- `git_gate: "advisory"` opts into the [advisory checks](security-model.md#strict-and-advisory-git-gates). Omission stays `strict`.
+- `git_gate: "advisory"` opts into the [advisory checks](security-model.md#strict-and-advisory-git-gates). The setup wizard registers new workspaces as `advisory` by default (`--git-gate strict` opts out); an existing entry that omits the field stays `strict`.
 - `allowed_files` remains an explicit registered file list. `forbidden_files` and `protected_file` exclude paths and descendants. Include private configuration, credentials, `.git` and `.bridge` in the appropriate protections; glob expansion always excludes the last two.
 - `other_prefixes`, `test_selection`, `test_commands[].applies_to`, `test_commands[].argv` and `require_test_output` are defined in [test policy, output evidence and Git review](test-evidence-git-review.md). Prefix labels do not authorize changes. Recommended reviewable projects use required test output and a deliberately chosen test ID.
 - `allow_globs` defaults to `false`. `glob_max_files` defaults to `200`, must be an integer in `1..2000`, and never permits more than the hard maximum of 2000 files. Non-default values participate in the policy fingerprint and require binding review.
@@ -270,7 +270,21 @@ version banner; upgrading to 0.1.5 changes the generated version banner.
 
 ## Routine fingerprint at claim
 
-New setup and migration packets render the execute claim command with
+The claim fingerprint is off by default for every workspace. It is enabled by
+`"routine_claim_fingerprint": true` in the registry entry (the wizard's
+`--claim-fingerprint` on first registration); any non-boolean value is rejected with
+`routine_claim_fingerprint_invalid`. Only `true` is added to the policy fingerprint,
+because it changes the Routine text. While it is off, generated Routine text has no
+`--expect-fingerprint` and no instruction to compare it, `routine-check` accepts such a
+command, and the local binding still records and compares the policy fingerprint.
+
+For an advisory workspace, whether or not the option is on, `policy_fingerprint` excludes
+`expected_head`, so ordinary commits do not invalidate the Routine; admission measures
+HEAD itself. Strict workspaces are unchanged. The policy fingerprint of an existing advisory
+binding therefore changes once: regenerate the material, update the Routine and
+reconfirm the binding.
+
+With the option on, new setup and migration packets render the execute claim command with
 `--expect-fingerprint <policy_fingerprint from this paste packet>`. The rendered
 value comes from `policy_fingerprint(workspace)` for the current registration.
 Use the fingerprint embedded in this Routine's paste packet; never invent it,
@@ -287,11 +301,12 @@ Stop without editing files and ask the administrator to paste an updated Routine
 The execution stays unclaimed; normal deadline observation later reports `timeout`.
 This never authorizes automatic resend, a replacement identity or rewriting evidence.
 
-Omitting the option preserves the former claim behavior and output, with no new
+Omitting the command option preserves the former claim behavior and output, with no new
 success fields. Old Routines remain compatible but do not perform this extra
 comparison against their own embedded fingerprint. `routine-check` reports a
 missing command option as `routine_claim_fingerprint_missing` in `warnings`
-(update recommended), without changing readiness by itself. Exact legacy templates
+(update recommended), without changing readiness by itself, and only when the
+workspace has `routine_claim_fingerprint: true`. Exact legacy templates
 remain recognized; unrelated template or binding faults still block readiness.
 `routine_policy_fingerprint_missing` means the packet lacks the current fingerprint;
 `routine_claim_fingerprint_mismatch` means a supplied command value is stale or

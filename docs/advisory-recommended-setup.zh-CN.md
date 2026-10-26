@@ -37,6 +37,7 @@ git -C $SourceRepo worktree add --detach $RuntimeSource $PublishedCommit
 | `allowed_files: []` | 存在前缀或上限时合法；前缀内的新文件无需重新登记。 |
 | `forbidden_files` / `protected_file` | 把代理规则、私有配置、`.git`、`.bridge` 挡在范围外；forbidden 与 protected 路径始终优先。 |
 | `local_validation: true` | 桥在本机完成 Validate（仅 advisory）；进入指纹。 |
+| `routine_claim_fingerprint: true` | 可选（默认关闭；向导 `--claim-fingerprint`）：Execute 的 claim 命令带 `--expect-fingerprint`；仅为 true 时进入指纹。 |
 | 测试命令的 `rerun` | 桥以 `shell=False` 复跑登记的测试并写回执；不进入指纹。 |
 | `require_test_output: true` | 缺少实测测试输出的结果记为 `test_evidence_missing`，而不是成功。 |
 
@@ -137,18 +138,20 @@ advisory 加 `local_validation` 时不会向 Grok 提交 Validate，因此只会
 | 生效前缀下新增文件 | 否 | 否 |
 | `rerun`（argv、cwd、env、`timeout_seconds`） | 否 | 否 |
 | 任务级 `execution_timeout` | 否（存于 manifest） | 否 |
+| advisory 工作区出现新提交（HEAD 移动） | 否（`expected_head` 不在其指纹中） | 否 |
+| `routine_claim_fingerprint` 开启或关闭 | 是（仅为 true 时出现） | 是 |
 
-“重粘”指重新生成 Routine 材料、粘贴到实际 Routine，并在本机确认绑定。策略中的其他字段同样进入指纹，改动时按第一组处理：`git_gate`（非 `strict` 时，因此切换到或离开 `advisory` 都会改变指纹）、`expected_machine`、`execution_profile`（存在时；向导会写入）、`expected_head`、`policy_revision`、凭据目标、`test_selection`、`allow_globs`、`glob_max_files`、`other_prefixes`，以及每条测试命令的 `id`、`task_types`、`argv` 与 `applies_to`。
+“重粘”指重新生成 Routine 材料、粘贴到实际 Routine，并在本机确认绑定。策略中的其他字段同样进入指纹，改动时按第一组处理：`git_gate`（非 `strict` 时，因此切换到或离开 `advisory` 都会改变指纹）、`expected_machine`、`execution_profile`（存在时；向导会写入）、`expected_head`（仅 strict 工作区）、`policy_revision`、凭据目标、`test_selection`、`allow_globs`、`glob_max_files`、`other_prefixes`，以及每条测试命令的 `id`、`task_types`、`argv` 与 `applies_to`。
 
 ## 登记后自检
 
 - `python -B -m grokbot_mcp.admin_cli registry-check --registry <registry.json> [--workspace <id>]`（随同 registry-check 变更发布）。只读：对每条 `argv` 与 `rerun.argv`，报告根内 cwd、显式可执行路径、unittest 模块和测试文件为 `ok`、`missing` 或 `unchecked`。裸命令名为 `unchecked`。它不执行任何东西，也不搜索 PATH；只是文件系统层面的提示，不证明测试能运行。
-- `grokbot-mcp routine-check --registry <registry.json> --workspace <id>`。只检查本地包，无法验证远端 Routine；加入指纹变更后，粘贴包的 claim 命令缺少 `--expect-fingerprint` 时还会给出警告。
+- `grokbot-mcp routine-check --registry <registry.json> --workspace <id>`。只检查本地包，无法验证远端 Routine；对设置了 `routine_claim_fingerprint: true` 的工作区，粘贴包的 claim 命令缺少 `--expect-fingerprint` 时还会给出警告。
 - `grok_preflight`：查看 `runtime_drift`（出现 `process_restart_recommended` 时重启 MCP 进程），以及随 registry-check 变更加入的 `test_command_check`（不改变 `local_ready`）。
 
 ## 领取时核对指纹（随同 claim 指纹变更发布）
 
-新的粘贴包会把 Execute 的 claim 命令渲染为带 `--expect-fingerprint <policy_fingerprint from this paste packet>`。当前策略与之不同时，claim 在写入任何内容之前返回 `routine_binding_mismatch`；Routine 必须停止且不改文件，由管理员粘贴更新后的 Routine。这是本地比对，不是对远端 Routine 文本的验证。
+认领指纹默认关闭，此时生成的 Routine 文本不含 `--expect-fingerprint`。对设置了 `routine_claim_fingerprint: true` 的工作区，新的粘贴包会把 Execute 的 claim 命令渲染为带 `--expect-fingerprint <policy_fingerprint from this paste packet>`。advisory 工作区的指纹无论该选项开关均不含 `expected_head`，普通提交不会使 Routine 失效；因此已有 advisory 绑定的指纹会变化一次，需重新生成材料、更新 Routine 并重新确认绑定。当前策略与之不同时，claim 在写入任何内容之前返回 `routine_binding_mismatch`；Routine 必须停止且不改文件，由管理员粘贴更新后的 Routine。这是本地比对，不是对远端 Routine 文本的验证。
 
 ## 常见问题
 

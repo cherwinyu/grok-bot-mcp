@@ -174,6 +174,7 @@ def make_advisory_workspace(
         "protected_file", "test_commands", "expected_machine",
         "validate_credential_target", "execute_credential_target", "git_gate",
     )}
+    policy.pop("expected_head")
     policy["policy_revision"] = 1
     fingerprint = hashlib.sha256(json.dumps(
         policy, sort_keys=True, separators=(",", ":"), ensure_ascii=True,

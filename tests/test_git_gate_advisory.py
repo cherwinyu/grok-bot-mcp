@@ -117,6 +117,21 @@ class GitGateAdvisoryTest(unittest.TestCase):
             document = json.loads(registry.read_text(encoding="utf-8"))
             self.assertEqual(document["workspaces"][0]["git_gate"], "advisory")
 
+    def test_new_registration_defaults_to_advisory_and_strict_is_explicit(self) -> None:
+        for gate, expected in ((None, "advisory"), ("strict", None)):
+            with self.subTest(gate=gate), temporary_directory() as name:
+                root = make_workspace(Path(name))
+                registry = Path(name) / "default" / "registry.json"
+                answers = [
+                    str(root), "src/counter.py", "", "src/do_not_touch.py",
+                    "python_unittest", "python -m unittest", "y", "n",
+                ]
+                kwargs = {} if gate is None else {"git_gate": gate}
+                with patch("builtins.input", side_effect=answers):
+                    setup_wizard.register(registry, "default-workspace", **kwargs)
+                item = json.loads(registry.read_text(encoding="utf-8"))["workspaces"][0]
+                self.assertEqual(item.get("git_gate"), expected)
+
     def test_main_forwards_advisory_command_line_flag(self) -> None:
         with patch.object(setup_wizard, "register") as register:
             code = setup_wizard.main([

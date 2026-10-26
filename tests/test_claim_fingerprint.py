@@ -16,7 +16,7 @@ from unittest.mock import patch
 from grokbot_mcp import claim_cli, facade, setup_wizard
 from grokbot_mcp.credentials.backend import install_backend
 from grokbot_mcp.registry import load_registry, policy_fingerprint
-from grokbot_mcp.routine import CLAIM_GUIDANCE, claim_command, claim_entry, confirmation, public_binding
+from grokbot_mcp.routine import CLAIM_GUIDANCE, FINGERPRINT_PLACEHOLDER, claim_command, claim_entry, confirmation, public_binding
 from grokbot_mcp.routine_check import check, inspect_text
 from grokbot_mcp.setup_environment import interpreter
 from tests.support import WORKSPACE_ID, MockTransport, make_workspace, write_proof
@@ -36,8 +36,16 @@ class ClaimFingerprintTest(unittest.TestCase):
         self.transport = MockTransport()
         facade.install_transport(self.transport)
         self.registry = self.base / "registry.json"
+        raw = json.loads(self.registry.read_bytes())
+        raw["workspaces"][0]["routine_claim_fingerprint"] = True
+        self.registry.write_text(json.dumps(raw), encoding="utf-8")
         self.workspace = load_registry(self.registry)[WORKSPACE_ID]
         self.fingerprint = policy_fingerprint(self.workspace)
+        for phase in ("validate", "execute"):
+            path = self.root / ".bridge" / (phase + "_routine_status.json")
+            binding = json.loads(path.read_bytes())
+            binding["binding"]["policy_fingerprint"] = self.fingerprint
+            path.write_text(json.dumps(binding), encoding="utf-8")
         self.execution_id = "11111111-1111-4111-8111-111111111111"
 
     def pending(self):
@@ -222,7 +230,7 @@ class ClaimFingerprintTest(unittest.TestCase):
     def test_static_templates_share_command_source_and_guidance(self):
         templates = files("grokbot_mcp").joinpath("templates")
         execute = templates.joinpath("execute.md").read_text(encoding="utf-8")
-        self.assertIn(claim_command("example-workspace"), execute)
+        self.assertIn(claim_command("example-workspace", FINGERPRINT_PLACEHOLDER), execute)
         for phase in ("validate", "execute"):
             self.assertIn(CLAIM_GUIDANCE, templates.joinpath(phase + ".md").read_text(encoding="utf-8"))
 

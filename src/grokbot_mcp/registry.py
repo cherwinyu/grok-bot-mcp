@@ -66,6 +66,7 @@ class Workspace:
     allowed_prefixes: tuple[AllowedPrefix, ...] = ()
     prefix_ceiling: tuple[AllowedPrefix, ...] | None = None
     local_validation: bool = False
+    routine_claim_fingerprint: bool = False
 
     def command(self, command_id: str) -> TestCommand | None:
         for item in self.test_commands:
@@ -116,7 +117,7 @@ def load_registry(path: Path | None = None) -> dict[str, Workspace]:
         # this is not a filesystem sandbox against concurrent file growth.
         encoded = file.read_text(encoding="utf-8").encode("utf-8")
         check_size(encoded)
-        raw = decode(encoded)
+        raw = decode(encoded.removeprefix(b"\xef\xbb\xbf"))
     except LedgerTooLarge as exc:
         raise RegistryError(exc.code) from exc
     except (OSError, UnicodeError, ValueError) as exc:
@@ -135,6 +136,23 @@ def load_registry(path: Path | None = None) -> dict[str, Workspace]:
         roots.add(key)
         found[workspace.workspace_id] = workspace
     return found
+
+
+def read_registry_document(path: Path) -> tuple[dict, bytes]:
+    """Read maintenance input with an optional BOM; retain original bytes for CAS."""
+    from grokbot_mcp.local_safety import LocalError, safe_path, parse_json
+    from grokbot_mcp.strict_json import MAX_BYTES
+    safe_path(path, regular=True)
+    try:
+        with path.open("rb") as handle:
+            raw = handle.read(MAX_BYTES + 1)
+    except OSError as exc:
+        raise LocalError("file_unreadable") from exc
+    try:
+        check_size(raw)
+    except LedgerTooLarge as exc:
+        raise LocalError(exc.code) from exc
+    return parse_json(raw.removeprefix(b"\xef\xbb\xbf")), raw
 
 
 def _workspace(item: object) -> Workspace:
@@ -213,6 +231,9 @@ def _workspace(item: object) -> Workspace:
         raise RegistryError("registry_invalid")
     writes = item.get("writes_enabled")
     local_validation = item.get("local_validation", False)
+    routine_claim_fingerprint = item.get("routine_claim_fingerprint", False)
+    if type(routine_claim_fingerprint) is not bool:
+        raise RegistryError("routine_claim_fingerprint_invalid")
     if type(local_validation) is not bool or (local_validation and git_gate != "advisory"):
         raise RegistryError("local_validation_invalid")
     if not isinstance(writes, bool):
@@ -252,6 +273,7 @@ def _workspace(item: object) -> Workspace:
         allowed_prefixes=prefixes,
         prefix_ceiling=ceiling,
         local_validation=local_validation,
+        routine_claim_fingerprint=routine_claim_fingerprint,
     )
 
 
@@ -326,6 +348,9 @@ def policy_fingerprint(workspace: Workspace) -> str:
         policy["execution_profile"] = asdict(workspace.execution_profile)
     if workspace.git_gate != "strict":
         policy["git_gate"] = workspace.git_gate
+    if workspace.git_gate == "advisory":
+        # Advisory admission measures HEAD independently of registered policy.
+        policy.pop("expected_head")
     policy.update(workspace_options(workspace))
     if workspace.prefix_ceiling is not None:
         policy.pop("allowed_prefixes", None)
@@ -339,7 +364,9 @@ def command_options(command: TestCommand) -> dict:
 
 
 def workspace_options(workspace: Workspace) -> dict:
+    # Only non-default options enter identity; old strict hashes remain intact.
     return {**({"local_validation": True} if workspace.local_validation else {}),
+            **({"routine_claim_fingerprint": True} if workspace.routine_claim_fingerprint else {}),
             **({"allowed_prefixes": prefix_json(workspace)} if workspace.allowed_prefixes else {}),
             **({"prefix_ceiling": prefix_json(workspace, ceiling=True)} if workspace.prefix_ceiling is not None else {}),
             **({"test_selection": workspace.test_selection} if workspace.test_selection != "warn" else {}),
@@ -352,7 +379,7 @@ def workspace_options(workspace: Workspace) -> dict:
 def workspace_profile(workspace: Workspace) -> dict:
     """Omit new defaults so existing generated materials retain their bytes."""
     value = asdict(workspace)
-    for key in ("test_selection", "require_test_output", "other_prefixes", "allow_globs", "glob_max_files", "allowed_prefixes", "prefix_ceiling", "local_validation"):
+    for key in ("test_selection", "require_test_output", "other_prefixes", "allow_globs", "glob_max_files", "allowed_prefixes", "prefix_ceiling", "local_validation", "routine_claim_fingerprint"):
         value.pop(key)
     value.update(workspace_options(workspace))
     for item, command in zip(value["test_commands"], workspace.test_commands):

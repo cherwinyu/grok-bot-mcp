@@ -4,8 +4,9 @@ from __future__ import annotations
 from copy import deepcopy
 from pathlib import Path, PurePosixPath
 
-from grokbot_mcp.local_safety import LocalError, read_document, json_bytes, create_new
+from grokbot_mcp.local_safety import LocalError, json_bytes, create_new
 from grokbot_mcp.registry import load_registry, _workspace, policy_fingerprint
+from grokbot_mcp.registry import read_registry_document as read_document
 from grokbot_mcp.security.paths import PathRejected
 from grokbot_mcp.security.prefixes import literal_path, parse_prefixes, prefix_json, prefix_allows
 
