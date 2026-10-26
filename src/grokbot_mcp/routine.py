@@ -58,10 +58,11 @@ CLAIM_GUIDANCE = (
 )
 
 
-def claim_command(workspace_id: str, fingerprint: str = FINGERPRINT_PLACEHOLDER) -> str:
+def claim_command(workspace_id: str, fingerprint: str | None = None) -> str:
     """Rendered command only; the exact attested claim_entry remains unchanged."""
     return ("grokbot_mcp.claim_cli --workspace " + workspace_id
-            + " --expect-fingerprint " + fingerprint + " <execution_id>")
+            + (" --expect-fingerprint " + fingerprint if fingerprint is not None else "")
+            + " <execution_id>")
 
 
 def binding_error(workspace: Workspace, phase: str, binding: object, registry: Path) -> str | None:

@@ -132,7 +132,7 @@ def register(registry: Path, workspace_id: str, *, mode: str = "create",
         raise ValueError("registration_cancelled")
     item["writes_enabled"] = yes("允许此工作区准备任务并修改白名单文件？Webhook 总开关仍独立控制")
     # Refuse to overwrite a registry edited while the administrator answered prompts.
-    raw = json.loads(registry.read_text(encoding="utf-8")) if registry.exists() else {"schema_version": 1, "workspaces": []}
+    raw = json.loads(registry.read_text(encoding="utf-8-sig")) if registry.exists() else {"schema_version": 1, "workspaces": []}
     current = load_registry(registry) if registry.exists() else {}
     if current != existing or (registry.read_bytes() if registry.exists() else None) != before:
         raise ValueError("registry_changed_retry")
@@ -153,12 +153,13 @@ def generate(registry: Path, workspace_id: str, mode: str = "reuse") -> Path:
     profile["root"] = str(workspace.root)
     profile.pop("validate_credential_target")
     profile.pop("execute_credential_target")
-    raw = json.loads(registry.read_text(encoding="utf-8"))
+    raw = json.loads(registry.read_text(encoding="utf-8-sig"))
     entry = next(w for w in raw["workspaces"] if w["workspace_id"] == workspace_id)
     instructions = entry.get("setup_test_instructions", {})
     from grokbot_mcp.routine import claim_command
     from grokbot_mcp.registry import policy_fingerprint
-    claim = "& '" + interpreter().replace("'", "''") + "' -I -X utf8 -m " + claim_command(workspace_id, policy_fingerprint(workspace))
+    claim = "& '" + interpreter().replace("'", "''") + "' -I -X utf8 -m " + claim_command(
+        workspace_id, policy_fingerprint(workspace) if workspace.routine_claim_fingerprint else None)
     guidance = {
         "reuse": "复用旧 Routine/Webhook，更新领取入口：reuse_scope=retain-routine-update-claim。"
                  "保留原 Routine、Webhook 和凭据，不创建重复项；先核对目录、工作区 ID、基线和白名单。"
@@ -371,7 +372,7 @@ def main(argv: list[str] | None = None) -> int:
             workspace_id = input("工作区 ID / Workspace ID: ").strip()
         saved_mode = None
         if workspace_id in existing:
-            raw = json.loads(registry.read_text(encoding="utf-8"))
+            raw = json.loads(registry.read_text(encoding="utf-8-sig"))
             entry = next(item for item in raw["workspaces"] if item["workspace_id"] == workspace_id)
             saved_mode = entry.get("setup_routine_mode")
         mode = args.routine_mode or (saved_mode if saved_mode in MODES else ("reuse" if workspace_id in existing else "create"))

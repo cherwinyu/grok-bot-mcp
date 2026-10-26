@@ -38,7 +38,8 @@ def inspect_text(text: str, workspace, registry: Path, python: Path, kind: str) 
     if re.search(r"(?<![0-9a-f])" + fingerprint + r"(?![0-9a-f])", text) is None:
         errors.append("routine_policy_fingerprint_missing")
     commands = re.findall(r"(?m)^[^\r\n]* -m grokbot_mcp\.claim_cli\b[^\r\n]*$", text)
-    if not commands or any("--expect-fingerprint" not in command for command in commands):
+    if workspace.routine_claim_fingerprint and (
+            not commands or any("--expect-fingerprint" not in command for command in commands)):
         errors.append("routine_claim_fingerprint_missing")
     for command in commands:
         if "--expect-fingerprint" in command:
@@ -83,6 +84,7 @@ def inspect_text(text: str, workspace, registry: Path, python: Path, kind: str) 
         errors.append("routine_prefix_policy_mismatch")
     # Explicit defaults must not conceal a stale non-default packet value.
     for key, value in (("git_gate", workspace.git_gate), ("allow_globs", workspace.allow_globs),
+                       ("routine_claim_fingerprint", workspace.routine_claim_fingerprint),
                        ("glob_max_files", workspace.glob_max_files), ("test_selection", workspace.test_selection),
                        ("require_test_output", workspace.require_test_output), ("other_prefixes", list(workspace.other_prefixes))):
         if key in profile and profile[key] != value:

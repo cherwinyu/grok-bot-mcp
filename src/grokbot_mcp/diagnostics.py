@@ -414,7 +414,7 @@ def _collect(registry: Path, workspace_id: str, *, purpose="setup", export=False
         if workspace is None:
             add("unknown_workspace", "registry")
             return public_report(report)
-        raw = json.loads(registry.read_text(encoding="utf-8"))
+        raw = json.loads(registry.read_text(encoding="utf-8-sig"))
         entry = next(item for item in raw["workspaces"] if item["workspace_id"] == workspace_id)
         if not entry.get("setup_test_instructions"):
             add("test_instructions_missing")

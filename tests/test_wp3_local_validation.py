@@ -297,6 +297,7 @@ class ConfigurationTest(unittest.TestCase):
         self.assertEqual(policy_fingerprint(original), policy_fingerprint(replace(original, local_validation=False)))
         enabled = replace(original, local_validation=True)
         self.assertNotEqual(policy_fingerprint(original), policy_fingerprint(enabled))
+        original = replace(original, routine_claim_fingerprint=True)
         expected = {"validate": "91c6d72f05f6c65a0282dcda05fb6321ce321f4dcb4b6fbec4fe30c80dc7a9cd",
                     "execute": "ec6bd97b5b0ff4f3a704d26e6b153c8ca0d2f20fcc904311b0711477b20abbfe"}
         with patch("grokbot_mcp.materials.__version__", "0.1.4b1"):
