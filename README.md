@@ -6,6 +6,38 @@
 
 **Experimental Beta line.** Check GitHub Releases for actual published assets; a source checkout alone is not an official release. MIT; unofficial and not endorsed by Grok, xAI, Cursor or OpenAI. Requires Windows, Python 3.12 and Git. The distribution is `grokbot-mcp-bridge` for compatibility; import as `grokbot_mcp`. Not a hosted service, PyPI package or guaranteed quota workaround.
 
+## What this project does
+
+A local Windows MCP stdio bridge. Cursor or Codex CLI hands a scoped coding task to a cloud Grok Bot Routine that **you** configure, once; the bridge then checks the outcome against Git diffs and structured, frozen evidence instead of trusting a "done" reply. It exposes seven MCP tools and no arbitrary shell or root tool.
+
+## Core idea
+
+- **Administrators register, callers do not choose.** The Git root, allowed files and test command are fixed in a registry; an MCP caller cannot pick arbitrary roots ([security model](docs/security-model.md)).
+- **Prepare/validate is separate from execute.** A valid manifest is not permission to run; execution has its own switch, which is off by default.
+- **Submit once.** Validation and execution submissions each have a durable ledger and are submitted at most once; an exclusive claim lets each execution id be claimed only once; `unknown_submission` is never resent.
+- **Results are checked, then frozen.** Result IDs, Git changes and test evidence are verified; terminal results are never overwritten ([result contract](docs/result-contract.md)).
+- **Local evidence proves only what the bridge saw locally.** It cannot attest what the external model did, and a supplemental bridge rerun never sets `qa_accepted`.
+- **`advisory_precheck` is an application-level allow-list, not an OS sandbox.**
+
+Design overview: [architecture](docs/architecture.md).
+
+## Status
+
+Experimental Beta; not production-ready. The version in `src/grokbot_mcp/__init__.py` on `main` is `0.1.5b5`.
+
+**Published:** the only GitHub Release is the prerelease `v0.1.4b1` ("Experimental Windows Beta", the only tag). No PyPI package.
+
+**Merged on `main`, not tagged or released** (0.1.5b2–b5, see [CHANGELOG](CHANGELOG.md)): advisory local validation; supplemental bridge-rerun evidence for `test_evidence_missing` (`succeeded_bridge_evidence` / `failed_bridge_evidence`, original result stays frozen); execution timeout ceiling of 3600 seconds; read-only `admin_cli registry-check` and `grok_preflight.test_command_check`; `claim_cli --expect-fingerprint`; governance paths excluded by default from prefix authorizations; `protected_or_forbidden_changed` names the protected or forbidden paths involved; the example-only script `scripts/grok_run_example.py` (not a supported interface).
+
+**Not done or not demonstrated:**
+- The [ROADMAP](ROADMAP.md) Beta gates have no completion evidence for 0.1.5b5: release-archive version and SHA verification, Windows installed-wheel stdio and fictional two-installation acceptance on the final commit, privacy/rights review, and human release approval.
+- Stable milestone not started: real client/provider compatibility evidence, a support matrix, an OS-enforced restricted executor, a security response procedure.
+- Public CI checks the installed wheel, config-fragment format and fictional stdio, but does not prove real client UI reconnect or real Grok Bot results.
+
+**Deferred:** PyPI, MCP Registry, other platforms, GUI, public shell execution, automatic retry after an unknown submission.
+
+Scope and support: [Beta support](docs/beta-support.md).
+
 ## Try it safely without any account
 
 On Windows PowerShell, after obtaining this reviewed source, use a **new** virtual environment:
@@ -21,7 +53,7 @@ $BridgePython = 'C:\ExampleBridgeBeta\Scripts\python.exe'
 
 Expected result includes `"mode": "OFFLINE_SIMULATION"` and `"real_webhooks_sent": 0`. It creates an owned fictional Git workspace, uses memory-only Webhook and credential doubles, actually runs two small Python tests, checks duplicate claims and frozen results, and removes the temporary fixture. It neither logs in nor proves the cloud Routine performed the fictional work. [Walkthrough](docs/offline-demo.md).
 
-## Why this bridge?
+## Workflow at a glance
 
 | Step | Capability | Boundary |
 |---|---|---|
@@ -31,15 +63,13 @@ Expected result includes `"mode": "OFFLINE_SIMULATION"` and `"real_webhooks_sent
 | Reconcile | Check result IDs, Git changes and frozen evidence | Local proof cannot independently attest external model actions |
 | Recover | Explicit migration, backup and rollback | Never silently overwrite a terminal result |
 
-Seven stable MCP stdio tools are retained. There is no arbitrary shell/root tool exposed over MCP.
-
 ## Optional advisory Git gate
 
 Workspace registrations may set `"git_gate": "advisory"`; omission remains byte-compatible with the existing strict mode. Advisory mode records the claim-time HEAD and pre-existing tracked/untracked changes, then reports newly observed or agent-reported paths outside `allowed_files` as `out_of_scope_changes` without failing solely for those paths. At admission and claim, registered protected/forbidden paths are checked against the current HEAD; after claim, their recorded hashes are compared again. `.git` is not path-compared and the bridge's own untracked `.bridge` runtime directory remains excluded. Git command failures, manifest scope, claim-once, identity, frozen evidence and no-resend checks remain fail-closed.
 
 This trade-off supports multiple agents sharing one checkout, but the bridge cannot determine which concurrent writer owns a change. Operators must review Git history and diffs themselves. Reads outside the declared scope are not detectable, and advisory mode is not an OS sandbox.
 
-[Whole-repository advisory guide](docs/advisory-workspaces.md): configuration and workflow, opt-in `allowed_globs` / `allow_globs`, local `routine-check`, and audited `ledger-archive`. [Test policy and evidence](docs/test-evidence-git-review.md) defines `applies_to`, `argv`, `test_selection`, `require_test_output`, `other_prefixes` and `git_review`; [hardening](docs/hardening.md) defines path normalization, bounded JSON and safe tool errors. All options preserve their existing defaults; the seven MCP tools and package version remain unchanged.
+[Whole-repository advisory guide](docs/advisory-workspaces.md): configuration and workflow, opt-in `allowed_globs` / `allow_globs`, local `routine-check`, and audited `ledger-archive`. [Test policy and evidence](docs/test-evidence-git-review.md) defines `applies_to`, `argv`, `test_selection`, `require_test_output`, `other_prefixes` and `git_review`; [hardening](docs/hardening.md) defines path normalization, bounded JSON and safe tool errors. All options preserve their existing defaults; the seven MCP tools remain unchanged.
 
 ## Where execution actually happens
 
@@ -65,7 +95,7 @@ Generate and review a Cursor JSON or Codex CLI TOML config snippet; put it into 
 
 [Client setup](docs/client-compatibility.md) · [Wizard quickstart](docs/quickstart.md) · [FAQ](docs/faq.md).
 
-Native Windows CI checks installed wheel, snippet formats and fictional stdio. It **does not establish actual user-client UI reconnect or live Grok Bot results**. [Support matrix](docs/beta-support.md).
+CI coverage limits are listed under [Status](#status). [Support matrix](docs/beta-support.md).
 
 ## Host setup
 
@@ -136,4 +166,4 @@ This repository does not host a host-side scope-correction framework. Failed rec
 
 [Issues](https://github.com/cherwinyu/grok-bot-mcp/issues) · [Contribute](CONTRIBUTING.md) · [Release procedure](docs/release-process.md) · [MIT](LICENSE) · [NOTICE](NOTICE.md) · [Changelog](CHANGELOG.md).
 
-GitHub Beta Release is the intended distribution channel; check Releases for availability. This repository does not include the private development Git history or its internal task logs. No PyPI distribution is provided as part of this Beta.
+GitHub prerelease is the intended distribution channel; see [Status](#status) for what is published. This repository does not include the private development Git history or its internal task logs.

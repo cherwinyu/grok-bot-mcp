@@ -6,6 +6,38 @@
 
 **实验性 Beta 系列。** 是否已正式发行请以 GitHub Releases 为准；单独的源码提交不是正式发行。 MIT；不是 Grok、xAI、Cursor 或 OpenAI 官方产品。目标环境 Windows、Python 3.12、Git。Python 分发名为 `grokbot-mcp-bridge`，导入名为 `grokbot_mcp`；不承诺绕过第三方订阅或调用限额。
 
+## 我们在做什么
+
+Windows 本地的 MCP stdio Bridge。Cursor 或 Codex CLI 把范围明确的编码任务交给**你自己配置**的云端 Grok Bot Routine 单次执行；Bridge 再用 Git 差异和结构化的冻结证据核验结果，而不是相信一句「完成了」。共七个 MCP 工具，不暴露任意 shell 或根目录工具。
+
+## 核心思路
+
+- **管理员登记，调用者不指定。** Git 根、允许文件和测试命令固定在登记表中，MCP 调用者不能随意指定根目录（[安全模型](docs/security-model.md)）。
+- **准备/校验与执行分离。** manifest 校验通过不等于允许执行；执行有独立开关，默认关闭。
+- **只提交一次。** 校验提交与执行提交各有持久账本，各自最多提交一次；排他 claim 保证每个 execution id 只被领取一次；`unknown_submission` 绝不重发。
+- **先核验，再冻结。** 校验结果 ID、Git 改动和测试证据；终态结果不会被覆盖（[结果契约](docs/result-contract.md)）。
+- **本地证据只证明 Bridge 在本地看到的东西。** 不能证明外部模型做过什么；桥本机补充复跑也不会把 `qa_accepted` 置为 true。
+- **`advisory_precheck` 是应用层白名单，不是 OS 沙箱。**
+
+设计概览：[架构](docs/architecture.md)。
+
+## 完成度
+
+实验性 Beta，尚非生产就绪。`main` 上 `src/grokbot_mcp/__init__.py` 的版本是 `0.1.5b5`。
+
+**已发布：** GitHub 上唯一的 Release 是预发行版 `v0.1.4b1`（"Experimental Windows Beta"，也是唯一的 tag）。没有 PyPI 包。
+
+**已合入 `main`，但没有 tag 和 Release**（0.1.5b2–b5，见 [CHANGELOG](CHANGELOG.md)）：advisory 本地校验；`test_evidence_missing` 的桥本机补充复跑证据（`succeeded_bridge_evidence` / `failed_bridge_evidence`，原结果保持冻结）；执行超时上限 3600 秒；只读 `admin_cli registry-check` 与 `grok_preflight.test_command_check`；`claim_cli --expect-fingerprint`；推导前缀授权时默认排除治理路径；`protected_or_forbidden_changed` 点名触犯的保护或禁止路径；仅作示例的脚本 `scripts/grok_run_example.py`（不是受支持接口）。
+
+**未完成或未证明：**
+- [ROADMAP](ROADMAP.md) 的 Beta 发布门对 0.1.5b5 尚无完成证据：发布包版本与 SHA 核验、最终提交上的 Windows 已安装 wheel stdio 与虚构双安装验收、隐私与权利审查、人工发布批准。
+- Stable 里程碑未开始：真实客户端/provider 兼容证据、支持矩阵、OS 强制的受限执行器、安全响应流程。
+- 公开 CI 检查已安装 wheel、配置片段格式和虚构 stdio，但不证明真实客户端 UI 重连或真实 Grok Bot 结果。
+
+**明确推迟：** PyPI、MCP Registry、其他平台、GUI、公开 shell 执行、未知提交后的自动重试。
+
+范围与支持：[Beta 支持范围](docs/beta-support.zh-CN.md)。
+
 ## 无需账号的安全离线体验
 
 获取已审核源码后，在新的 Windows PowerShell 和独立虚拟环境中运行，勿覆盖正在使用的安装：
@@ -21,7 +53,7 @@ $BridgePython = 'C:\ExampleBridgeBeta\Scripts\python.exe'
 
 预期 JSON 包含 `"mode": "OFFLINE_SIMULATION"` 和 `"real_webhooks_sent": 0`。它在虚构 Git 项目中使用内存 Webhook/凭据替身，实际执行 2 项 Python 小测试，验证重复领取、冻结结果拒绝，再清理临时文件。**不是远端 Grok Bot 现场验收。** [离线说明](docs/offline-demo.zh-CN.md)。
 
-## 现有能力和硬边界
+## 能力一览
 
 | 能力 | 作用 | 限制 |
 |---|---|---|
@@ -31,15 +63,13 @@ $BridgePython = 'C:\ExampleBridgeBeta\Scripts\python.exe'
 | 交付核验 | Git 改动、身份、冻结结果 | 本地证据不能证明模型所有行为 |
 | 维护恢复 | 预览、备份、迁移、回退 | 不自动覆盖冻结证据 |
 
-保留七个 MCP stdio 工具，不向 MCP 暴露任意 shell 命令工具。
-
 ## 可选 advisory Git 门
 
 工作区登记可设置 `"git_gate": "advisory"`；省略字段时仍是原有 strict 模式，旧登记文件不会因代码升级而改写。advisory 会记录 claim 时的 HEAD 与此前已有的已跟踪/未跟踪改动；执行后，超出 `allowed_files` 的新增或上报路径进入 `out_of_scope_changes`，不会仅因此把结果降为失败。准入及 claim 时，登记的保护/禁止路径会对照当前 HEAD 检查；claim 后再比对已记录哈希。`.git` 不做路径比对，Bridge 自身未跟踪的 `.bridge` 运行目录继续排除。Git 命令失败、manifest 范围、claim-once、身份校验、冻结证据和不重发仍保持 fail-closed。
 
 该模式允许多个 Agent 共用一个 checkout，但 Bridge 无法判断并行改动归属，使用方必须自行复核 Git 历史与 diff。越界读取无法检测；advisory 也不是 OS 沙箱。
 
-[整仓 advisory 指南](docs/advisory-workspaces.zh-CN.md)集中说明配置与流程、可选 `allowed_globs` / `allow_globs`、本地 `routine-check` 和有审计的 `ledger-archive` 恢复。[测试策略与证据](docs/test-evidence-git-review.zh-CN.md)定义 `applies_to`、`argv`、`test_selection`、`require_test_output`、`other_prefixes`、`git_review`；[加固说明](docs/hardening.zh-CN.md)定义路径规范化、JSON 上限和安全工具错误。各选项保留原默认值，MCP 工具仍为七个，版本号不变。禁止手工删账本；唯一受支持的账本归档恢复路径为指南中的 `ledger-archive`。
+[整仓 advisory 指南](docs/advisory-workspaces.zh-CN.md)集中说明配置与流程、可选 `allowed_globs` / `allow_globs`、本地 `routine-check` 和有审计的 `ledger-archive` 恢复。[测试策略与证据](docs/test-evidence-git-review.zh-CN.md)定义 `applies_to`、`argv`、`test_selection`、`require_test_output`、`other_prefixes`、`git_review`；[加固说明](docs/hardening.zh-CN.md)定义路径规范化、JSON 上限和安全工具错误。各选项保留原默认值，MCP 工具仍为七个。禁止手工删账本；唯一受支持的账本归档恢复路径为指南中的 `ledger-archive`。
 
 ## 云端与 Windows 的执行边界
 
@@ -128,8 +158,8 @@ $utf8 = New-Object System.Text.UTF8Encoding $false
 
 可只读生成 Cursor JSON 与 Codex CLI TOML 配置片段；必须自行审阅并导入支持的客户端。[双客户端配置](docs/client-compatibility.zh-CN.md) · [快速开始](docs/quickstart.zh-CN.md) · [支持矩阵](docs/beta-support.zh-CN.md) · [FAQ](docs/faq.zh-CN.md)。
 
-公开 CI 证明已安装 wheel、模拟 stdio 和配置语法，**不代表真实客户端 UI 重连或远端执行通过了公开独立验收**。
+CI 覆盖范围的限制见[完成度](#完成度)。
 
 [Issue 与反馈](https://github.com/cherwinyu/grok-bot-mcp/issues) · [贡献](CONTRIBUTING.md) · [发行流程](docs/release-process.md) · [MIT](LICENSE)
 
-新仓没有导入私人开发历史。是否有正式 Beta 包请以 GitHub Releases 为准，首版不通过 PyPI 分发。
+新仓没有导入私人开发历史。已发布内容见[完成度](#完成度)。
