@@ -24,6 +24,10 @@ class Client(Protocol):
     async def call(self, name: str, arguments: dict) -> dict: ...
 
 
+class CallBudgetTimeout(TimeoutError):
+    """The local wait_for budget cancelled the client call."""
+
+
 class StdioClient:
     def __init__(self, session):
         self.session = session
@@ -157,7 +161,13 @@ class Runner:
 
     async def call(self, name, *, timeout=120, **arguments):
         args = arguments if name == "grok_list_workspaces" else {"workspace_id": self.workspace, **arguments}
-        result = await asyncio.wait_for(self.client.call(name, args), timeout)
+        task = asyncio.create_task(self.client.call(name, args))
+        try:
+            result = await asyncio.wait_for(task, timeout)
+        except TimeoutError as exc:
+            if task.cancelled():
+                raise CallBudgetTimeout() from exc
+            raise
         if not isinstance(result, dict) or not result:
             raise ValueError("invalid_response")
         if "qa_accepted" in result:
@@ -214,6 +224,9 @@ class Runner:
             try:
                 payload = await self.call("grok_get_status", timeout=remaining,
                                           wait_seconds=min(50, int(remaining)), **args)
+            except CallBudgetTimeout:
+                # Timer callbacks can fire before the monotonic deadline on Windows.
+                return self.finish("TIMEOUT_PENDING", "wait_budget_exhausted")
             except TimeoutError:
                 if self.clock() >= deadline:
                     return self.finish("TIMEOUT_PENDING", "wait_budget_exhausted")

@@ -167,9 +167,45 @@ class ExampleTest(unittest.TestCase):
         class SlowClient(FakeClient):
             async def call(self, name, arguments):
                 if name == "grok_get_status":
-                    await asyncio.sleep(1)
+                    await asyncio.Event().wait()
                 return await super().call(name, arguments)
-        self.assertEqual(self.run_fake(SlowClient(), wait_budget=0.01)["status"], "TIMEOUT_PENDING")
+        # Keep the logical deadline in the future even after the real timer fires.
+        runner = example.Runner(SlowClient(), "example-workspace", clock=lambda: 0.0)
+        result = asyncio.run(runner.run(SPEC, wait_budget=0.01))
+        self.assertEqual((result["status"], result["reason"], result["exit_code"]),
+                         ("TIMEOUT_PENDING", "wait_budget_exhausted", 2))
+
+    def test_wait_timeout_before_deadline(self):
+        now = [0.0]
+        client = FakeClient()
+        runner = example.Runner(client, "example-workspace", clock=lambda: now[0])
+
+        async def early_wait_for(task, timeout):
+            self.assertEqual(timeout, 1.0)
+            now[0] = 0.995
+            task.cancel()
+            with self.assertRaises(asyncio.CancelledError):
+                await task
+            raise TimeoutError()
+
+        with patch.object(example.asyncio, "wait_for", side_effect=early_wait_for) as wait_for:
+            result = asyncio.run(runner.run(execution_id=EXECUTION, wait_budget=1.0))
+        wait_for.assert_called_once()
+        self.assertLess(now[0], 1.0)
+        self.assertEqual((result["status"], result["reason"], result["exit_code"]),
+                         ("TIMEOUT_PENDING", "wait_budget_exhausted", 2))
+        self.assertEqual(client.count("grok_submit_execution"), 0)
+        self.assertIn(EXECUTION, result["next_step"])
+
+    def test_client_timeout_before_wait_budget(self):
+        client = FakeClient()
+        client.responses["grok_get_status"] = [TimeoutError()]
+        runner = example.Runner(client, "example-workspace", clock=lambda: 0.0)
+        result = asyncio.run(runner.run(SPEC, wait_budget=900))
+        self.assertEqual((result["status"], result["reason"], result["exit_code"]),
+                         ("STATUS_UNKNOWN", "operation_unconfirmed", 2))
+        self.assertEqual(client.count("grok_get_status"), 1)
+        self.assertEqual(client.count("grok_submit_execution"), 1)
 
     def test_bridge_timeout_and_unknown_are_unresolved(self):
         for state, expected in (("timeout", "TIMEOUT_PENDING"), ("unknown_submission", "SUBMIT_UNKNOWN")):
